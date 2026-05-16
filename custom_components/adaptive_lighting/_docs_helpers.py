@@ -8,11 +8,16 @@ from homeassistant.helpers import selector
 from .const import (
     DOCS,
     DOCS_APPLY,
-    DOCS_MANUAL_CONTROL,
-    SET_MANUAL_CONTROL_SCHEMA,
     VALIDATION_TUPLES,
     apply_service_schema,
 )
+
+# Stubs for upstream docs sections that no longer exist in the CDiT fork.
+# The docs generator script reads these by name; provide empty placeholders
+# so the script does not crash. The section in the rendered README will be
+# empty and can be deleted from the template separately.
+DOCS_MANUAL_CONTROL: dict[str, str] = {}
+SET_MANUAL_CONTROL_SCHEMA = None
 
 
 def _format_voluptuous_instance(instance: vol.All) -> str:

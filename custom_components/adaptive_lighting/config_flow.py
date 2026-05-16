@@ -1,80 +1,334 @@
-"""Config flow for Adaptive Lighting integration."""
+"""Config flow for Adaptive Lighting (CDiT fork).
+
+Replaces upstream's flat 40-field options dialog with a six-section
+layout (Targets / Daytime curve / Sun schedule / Light control / Advanced /
+Diagnostics) using HA's `section()` helper and native selectors throughout.
+See design.md decisions 1, 5, 6, 9, 14 and specs/options-flow/spec.md R1-R7.
+"""
 
 import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant import config_entries
+from homeassistant.config_entries import (
+    SOURCE_IMPORT,
+    ConfigEntry,
+)
+from homeassistant.config_entries import ConfigFlow as HAConfigFlow
+
+try:
+    from homeassistant.config_entries import OptionsFlowWithReload
+except ImportError:  # pragma: no cover — HA < 2025.1 fallback for dev env
+    from homeassistant.config_entries import OptionsFlow as OptionsFlowWithReload
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
-from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
-
-from .const import (  # pylint: disable=unused-import
-    CONF_LIGHTS,
-    DOMAIN,
-    EXTRA_VALIDATION,
-    NONE_STR,
-    VALIDATION_TUPLES,
+from homeassistant.data_entry_flow import section
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    EntitySelector,
+    EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
 )
-from .switch import validate
+
+from .const import (
+    CONF_ADAPT_DELAY,
+    CONF_INCLUDE_CONFIG_IN_ATTRIBUTES,
+    CONF_INITIAL_TRANSITION,
+    CONF_INTERCEPT,
+    CONF_INTERVAL,
+    CONF_LIGHTS,
+    CONF_MAX_BRIGHTNESS,
+    CONF_MAX_COLOR_TEMP,
+    CONF_MIN_BRIGHTNESS,
+    CONF_MIN_COLOR_TEMP,
+    CONF_MULTI_LIGHT_INTERCEPT,
+    CONF_PREFER_RGB_COLOR,
+    CONF_SEND_SPLIT_DELAY,
+    CONF_SEPARATE_TURN_ON_COMMANDS,
+    CONF_SKIP_REDUNDANT_COMMANDS,
+    CONF_SUNRISE_ENTITY,
+    CONF_SUNSET_ENTITY,
+    CONF_TRANSITION,
+    CONFIG_ENTRY_VERSION,
+    DEFAULT_INITIAL_TRANSITION,
+    DEFAULT_INTERCEPT,
+    DEFAULT_INTERVAL,
+    DEFAULT_MAX_BRIGHTNESS,
+    DEFAULT_MAX_COLOR_TEMP,
+    DEFAULT_MIN_BRIGHTNESS,
+    DEFAULT_MIN_COLOR_TEMP,
+    DEFAULT_MULTI_LIGHT_INTERCEPT,
+    DEFAULT_PREFER_RGB_COLOR,
+    DEFAULT_SEND_SPLIT_DELAY,
+    DEFAULT_SEPARATE_TURN_ON_COMMANDS,
+    DEFAULT_SKIP_REDUNDANT_COMMANDS,
+    DEFAULT_SUNRISE_ENTITY,
+    DEFAULT_SUNSET_ENTITY,
+    DEFAULT_TRANSITION,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-OPTIONS_FLOW_DESCRIPTION_PLACEHOLDERS = {
-    "webapp_url": "https://basnijholt.github.io/adaptive-lighting",
-    "docs_url": "https://github.com/basnijholt/adaptive-lighting#readme",
-}
+
+# --- Section identifiers (also the translation-key roots in strings.json) ---
+SECTION_TARGETS = "targets"
+SECTION_DAYTIME = "daytime_curve"
+SECTION_SUN = "sun_schedule"
+SECTION_LIGHT_CONTROL = "light_control"
+SECTION_ADVANCED = "advanced"
+SECTION_DIAGNOSTICS = "diagnostics"
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Adaptive Lighting."""
+# --- Selector factories (consistent units, ranges, units of measurement) ---
 
-    VERSION = 1
 
-    source_options: dict[str, Any] | None = None
+def _brightness_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=1,
+            max=100,
+            step=1,
+            unit_of_measurement="%",
+            mode=NumberSelectorMode.SLIDER,
+        ),
+    )
+
+
+def _color_temp_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=1000,
+            max=10000,
+            step=100,
+            unit_of_measurement="K",
+            mode=NumberSelectorMode.BOX,
+        ),
+    )
+
+
+def _duration_seconds_selector(max_value: int = 3600) -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=0,
+            max=max_value,
+            step=1,
+            unit_of_measurement="s",
+            mode=NumberSelectorMode.BOX,
+        ),
+    )
+
+
+def _duration_milliseconds_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=0,
+            max=10000,
+            step=10,
+            unit_of_measurement="ms",
+            mode=NumberSelectorMode.BOX,
+        ),
+    )
+
+
+def _lights_selector() -> EntitySelector:
+    return EntitySelector(EntitySelectorConfig(domain="light", multiple=True))
+
+
+def _sun_event_selector() -> EntitySelector:
+    return EntitySelector(
+        EntitySelectorConfig(domain="sensor", device_class="timestamp"),
+    )
+
+
+# --- Schema builder ---
+
+
+def _build_options_schema(
+    current: dict[str, Any],
+    *,
+    show_send_split_delay: bool,
+) -> vol.Schema:
+    """Build the sectioned options schema from the entry's current values."""
+
+    targets_section = section(
+        vol.Schema(
+            {
+                vol.Required(
+                    CONF_LIGHTS,
+                    default=current.get(CONF_LIGHTS, []),
+                ): _lights_selector(),
+            },
+        ),
+        {"collapsed": False},
+    )
+
+    daytime_section = section(
+        vol.Schema(
+            {
+                vol.Required(
+                    CONF_MIN_BRIGHTNESS,
+                    default=current.get(CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS),
+                ): _brightness_selector(),
+                vol.Required(
+                    CONF_MAX_BRIGHTNESS,
+                    default=current.get(CONF_MAX_BRIGHTNESS, DEFAULT_MAX_BRIGHTNESS),
+                ): _brightness_selector(),
+                vol.Required(
+                    CONF_MIN_COLOR_TEMP,
+                    default=current.get(CONF_MIN_COLOR_TEMP, DEFAULT_MIN_COLOR_TEMP),
+                ): _color_temp_selector(),
+                vol.Required(
+                    CONF_MAX_COLOR_TEMP,
+                    default=current.get(CONF_MAX_COLOR_TEMP, DEFAULT_MAX_COLOR_TEMP),
+                ): _color_temp_selector(),
+                vol.Required(
+                    CONF_PREFER_RGB_COLOR,
+                    default=current.get(CONF_PREFER_RGB_COLOR, DEFAULT_PREFER_RGB_COLOR),
+                ): BooleanSelector(),
+            },
+        ),
+        {"collapsed": False},
+    )
+
+    sun_section = section(
+        vol.Schema(
+            {
+                vol.Required(
+                    CONF_SUNRISE_ENTITY,
+                    default=current.get(CONF_SUNRISE_ENTITY, DEFAULT_SUNRISE_ENTITY),
+                ): _sun_event_selector(),
+                vol.Required(
+                    CONF_SUNSET_ENTITY,
+                    default=current.get(CONF_SUNSET_ENTITY, DEFAULT_SUNSET_ENTITY),
+                ): _sun_event_selector(),
+            },
+        ),
+        {"collapsed": False},
+    )
+
+    light_control_section = section(
+        vol.Schema(
+            {
+                vol.Required(
+                    CONF_INTERCEPT,
+                    default=current.get(CONF_INTERCEPT, DEFAULT_INTERCEPT),
+                ): BooleanSelector(),
+                vol.Required(
+                    CONF_MULTI_LIGHT_INTERCEPT,
+                    default=current.get(
+                        CONF_MULTI_LIGHT_INTERCEPT,
+                        DEFAULT_MULTI_LIGHT_INTERCEPT,
+                    ),
+                ): BooleanSelector(),
+            },
+        ),
+        {"collapsed": False},
+    )
+
+    advanced_schema: dict[Any, Any] = {
+        vol.Required(
+            CONF_INTERVAL,
+            default=current.get(CONF_INTERVAL, DEFAULT_INTERVAL),
+        ): _duration_seconds_selector(),
+        vol.Required(
+            CONF_TRANSITION,
+            default=current.get(CONF_TRANSITION, DEFAULT_TRANSITION),
+        ): _duration_seconds_selector(max_value=300),
+        vol.Required(
+            CONF_INITIAL_TRANSITION,
+            default=current.get(CONF_INITIAL_TRANSITION, DEFAULT_INITIAL_TRANSITION),
+        ): _duration_seconds_selector(max_value=300),
+        vol.Required(
+            CONF_ADAPT_DELAY,
+            default=current.get(CONF_ADAPT_DELAY, 0),
+        ): _duration_seconds_selector(max_value=300),
+        vol.Required(
+            CONF_SEPARATE_TURN_ON_COMMANDS,
+            default=current.get(
+                CONF_SEPARATE_TURN_ON_COMMANDS,
+                DEFAULT_SEPARATE_TURN_ON_COMMANDS,
+            ),
+        ): BooleanSelector(),
+        vol.Required(
+            CONF_SKIP_REDUNDANT_COMMANDS,
+            default=current.get(
+                CONF_SKIP_REDUNDANT_COMMANDS,
+                DEFAULT_SKIP_REDUNDANT_COMMANDS,
+            ),
+        ): BooleanSelector(),
+    }
+    # Conditional visibility for send_split_delay: only when its driver
+    # (separate_turn_on_commands) is true. Spec R2.
+    if show_send_split_delay:
+        advanced_schema[
+            vol.Required(
+                CONF_SEND_SPLIT_DELAY,
+                default=current.get(CONF_SEND_SPLIT_DELAY, DEFAULT_SEND_SPLIT_DELAY),
+            )
+        ] = _duration_milliseconds_selector()
+
+    advanced_section = section(
+        vol.Schema(advanced_schema),
+        {"collapsed": True},
+    )
+
+    diagnostics_section = section(
+        vol.Schema(
+            {
+                vol.Required(
+                    CONF_INCLUDE_CONFIG_IN_ATTRIBUTES,
+                    default=current.get(CONF_INCLUDE_CONFIG_IN_ATTRIBUTES, False),
+                ): BooleanSelector(),
+            },
+        ),
+        {"collapsed": True},
+    )
+
+    return vol.Schema(
+        {
+            vol.Required(SECTION_TARGETS): targets_section,
+            vol.Required(SECTION_DAYTIME): daytime_section,
+            vol.Required(SECTION_SUN): sun_section,
+            vol.Required(SECTION_LIGHT_CONTROL): light_control_section,
+            vol.Required(SECTION_ADVANCED): advanced_section,
+            vol.Required(SECTION_DIAGNOSTICS): diagnostics_section,
+        },
+    )
+
+
+def _flatten_sections(sectioned: dict[str, Any]) -> dict[str, Any]:
+    """Flatten a sectioned form result back into a flat options dict.
+
+    HA's section() wraps each section's values in a nested dict; we store
+    options flat (matching VALIDATION_TUPLES), so unwrap here.
+    """
+    flat: dict[str, Any] = {}
+    for value in sectioned.values():
+        if isinstance(value, dict):
+            flat.update(value)
+        else:
+            flat[CONF_NAME] = value  # unlikely fallback
+    return flat
+
+
+class AdaptiveLightingConfigFlow(HAConfigFlow, domain=DOMAIN):
+    """Handle a config flow for the CDiT Adaptive Lighting fork."""
+
+    VERSION = CONFIG_ENTRY_VERSION
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        """Handle the initial step."""
-        if user_input is None and self._async_current_entries():
-            return await self.async_step_menu()
-        return await self.async_step_wait_for_name(user_input)
-
-    async def async_step_menu(self, user_input: dict[str, Any] | None = None):
-        """Handle the menu step."""
-        if user_input is not None:
-            if user_input["action"] != "new":
-                entry_id = user_input["action"]
-                entry = self.hass.config_entries.async_get_entry(entry_id)
-                if entry:
-                    self.source_options = dict(entry.options)
-            return await self.async_step_wait_for_name()
-
-        entries = self._async_current_entries()
-        options = {"new": "Create new instance"}
-        for entry in entries:
-            options[entry.entry_id] = f"Duplicate '{entry.title}'"
-
-        return self.async_show_form(
-            step_id="menu",
-            data_schema=vol.Schema(
-                {vol.Required("action", default="new"): vol.In(options)},
-            ),
-        )
-
-    async def async_step_wait_for_name(self, user_input: dict[str, Any] | None = None):
-        """Handle the name step."""
+        """Initial step: ask for a profile name."""
         errors: dict[str, str] = {}
-
         if user_input is not None:
             await self.async_set_unique_id(user_input[CONF_NAME])
             self._abort_if_unique_id_configured()
-            options = self.source_options
             return self.async_create_entry(
                 title=user_input[CONF_NAME],
                 data=user_input,
-                options=options,
             )
-
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_NAME): str}),
@@ -82,96 +336,80 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_import(self, user_input: dict[str, Any] | None = None):
-        """Handle configuration by YAML file."""
+        """Handle a YAML import.
+
+        YAML-configured entries can be loaded into HA but cannot be edited
+        via the options flow — see `OptionsFlowHandler.async_step_init`.
+        """
         if user_input is None:
             return self.async_abort(reason="no_data")
-
         await self.async_set_unique_id(user_input[CONF_NAME])
-        # Keep a list of switches that are configured via YAML
         data = self.hass.data.setdefault(DOMAIN, {})
         data.setdefault("__yaml__", set()).add(self.unique_id)
-
         for entry in self._async_current_entries():
             if entry.unique_id == self.unique_id:
                 self.hass.config_entries.async_update_entry(entry, data=user_input)
                 self._abort_if_unique_id_configured()
-
         return self.async_create_entry(title=user_input[CONF_NAME], data=user_input)
 
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,  # noqa: ARG004
+        config_entry: ConfigEntry,  # noqa: ARG004
     ) -> "OptionsFlowHandler":
         """Get the options flow for this handler."""
         return OptionsFlowHandler()
 
 
-def validate_options(user_input: dict[str, Any], errors: dict[str, str]) -> None:
-    """Validate the options in the OptionsFlow.
+# Legacy alias so external code that does `from .config_flow import ConfigFlow`
+# (such as upstream's docs/tests harness) still resolves.
+ConfigFlow = AdaptiveLightingConfigFlow
 
-    This is an extra validation step because the validators
-    in `EXTRA_VALIDATION` cannot be serialized to json.
+
+class OptionsFlowHandler(OptionsFlowWithReload):
+    """Sectioned options flow with reload-on-save.
+
+    Spec R6: extends OptionsFlowWithReload so saving triggers a clean
+    reload of the entry. Spec R7: YAML-managed entries abort with a
+    translation-keyed message instead of presenting an editable form.
     """
-    for key, (_validate, _) in EXTRA_VALIDATION.items():
-        # these are unserializable validators
-        value = user_input.get(key)
-        try:
-            if value is not None and value != NONE_STR:
-                _validate(value)
-        except vol.Invalid:
-            _LOGGER.exception("Configuration option %s=%s is incorrect", key, value)
-            errors["base"] = "option_error"
-
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle a option flow for Adaptive Lighting."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Handle options flow."""
         conf = self.config_entry
-        data = validate(conf)
-        if conf.source == config_entries.SOURCE_IMPORT:
-            return self.async_show_form(
-                step_id="init",
-                data_schema=None,
-                description_placeholders=OPTIONS_FLOW_DESCRIPTION_PLACEHOLDERS,
-            )
+        if conf.source == SOURCE_IMPORT:
+            return self.async_abort(reason="yaml_managed")
+
+        # Merge data and options to compute the effective "current" view.
+        current = dict(conf.data)
+        current.update(conf.options)
+
         errors: dict[str, str] = {}
         if user_input is not None:
-            validate_options(user_input, errors)
+            flat = _flatten_sections(user_input)
+            # Validate at least one light still exists.
+            all_lights = set(self.hass.states.async_entity_ids("light"))
+            for configured_light in flat.get(CONF_LIGHTS, []):
+                if configured_light not in all_lights:
+                    errors[CONF_LIGHTS] = "entity_missing"
+                    _LOGGER.error(
+                        "Adaptive Lighting: light entity %s is configured but not "
+                        "currently registered. Aborting save.",
+                        configured_light,
+                    )
+                    break
             if not errors:
-                return self.async_create_entry(title="", data=user_input)
-
-        # Validate that all configured lights still exist
-        all_lights = set(self.hass.states.async_entity_ids("light"))
-        for configured_light in data[CONF_LIGHTS]:
-            if configured_light not in all_lights:
-                errors = {CONF_LIGHTS: "entity_missing"}
-                _LOGGER.error(
-                    "%s: light entity %s is configured, but was not found",
-                    data[CONF_NAME],
-                    configured_light,
-                )
-
-        to_replace: dict[str, Any] = {
-            CONF_LIGHTS: EntitySelector(
-                EntitySelectorConfig(
-                    domain="light",
-                    multiple=True,
-                ),
-            ),
-        }
-
-        options_schema = {}
-        for name, default, validation in VALIDATION_TUPLES:
-            key = vol.Optional(name, default=conf.options.get(name, default))
-            value = to_replace.get(name, validation)
-            options_schema[key] = value
+                return self.async_create_entry(title="", data=flat)
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(options_schema),
+            data_schema=_build_options_schema(
+                current,
+                show_send_split_delay=bool(
+                    current.get(
+                        CONF_SEPARATE_TURN_ON_COMMANDS,
+                        DEFAULT_SEPARATE_TURN_ON_COMMANDS,
+                    ),
+                ),
+            ),
             errors=errors,
-            description_placeholders=OPTIONS_FLOW_DESCRIPTION_PLACEHOLDERS,
         )

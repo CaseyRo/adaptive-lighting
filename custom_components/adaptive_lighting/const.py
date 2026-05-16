@@ -1,109 +1,77 @@
-"""Constants for the Adaptive Lighting integration."""
+"""Constants for the Adaptive Lighting integration (CDiT fork)."""
 
 from datetime import timedelta
-from enum import Enum
 from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components.light import VALID_TRANSITION
 from homeassistant.const import CONF_ENTITY_ID
-from homeassistant.helpers import selector
 
-ICON_MAIN = "mdi:theme-light-dark"
-ICON_BRIGHTNESS = "mdi:brightness-4"
-ICON_COLOR_TEMP = "mdi:sun-thermometer"
-ICON_SLEEP = "mdi:sleep"
+# CDiT icons (task 2.5). Master switch signals "this is an automatic system",
+# the two adapt switches name the attribute they govern.
+ICON_MAIN = "mdi:weather-sunny-alert"
+ICON_BRIGHTNESS = "mdi:brightness-percent"
+ICON_COLOR_TEMP = "mdi:invert-colors"
 
 DOMAIN = "adaptive_lighting"
 
+# Half-width of the tanh ramp around each sun event, in seconds.
+# 30 minutes is the eye-friendly circadian-transition sweet spot; long enough
+# to feel gradual, short enough to stay in-window across solstice-to-equinox
+# sunrise drift. Documented in design.md decision 15.
+RAMP_HALF_WIDTH_SECONDS = 1800
 
-class TakeOverControlMode(Enum):
-    """Modes for pausing adaptation when control of a light is taken over externally."""
-
-    PAUSE_ALL = "pause_all"
-    PAUSE_CHANGED = "pause_changed"
-
+# CDiT config-entry schema version. Bumped from upstream's implicit v1.
+# An entry with version < CONFIG_ENTRY_VERSION fails async_setup_entry with
+# a "recreate this entry" message — see design.md decision 4.
+CONFIG_ENTRY_VERSION = 2
 
 DOCS = {CONF_ENTITY_ID: "Entity ID of the switch. 📝"}
 
 
 CONF_NAME, DEFAULT_NAME = "name", "default"
-DOCS[CONF_NAME] = "Display name for this switch. 📝"
+DOCS[CONF_NAME] = "Display name for this profile."
 
 CONF_LIGHTS, DEFAULT_LIGHTS = "lights", []
-DOCS[CONF_LIGHTS] = "List of light entity_ids to be controlled (may be empty). 🌟"
-
-CONF_DETECT_NON_HA_CHANGES, DEFAULT_DETECT_NON_HA_CHANGES = (
-    "detect_non_ha_changes",
-    False,
-)
-DOCS[CONF_DETECT_NON_HA_CHANGES] = (
-    "Detects and halts adaptations for non-`light.turn_on` state changes. "
-    "Needs `take_over_control` enabled. 🕵️ "
-    "Caution: ⚠️ Some lights might falsely indicate an 'on' state, which could result "
-    "in lights turning on unexpectedly. "
-    "Note that this calls `homeassistant.update_entity` every `interval`! "
-    "Disable this feature if you encounter such issues."
-)
+DOCS[CONF_LIGHTS] = "Light entities this profile controls."
 
 CONF_INCLUDE_CONFIG_IN_ATTRIBUTES, DEFAULT_INCLUDE_CONFIG_IN_ATTRIBUTES = (
     "include_config_in_attributes",
     False,
 )
 DOCS[CONF_INCLUDE_CONFIG_IN_ATTRIBUTES] = (
-    "Show all options as attributes on the switch in "
-    "Home Assistant when set to `true`. 📝"
+    "Expose all configuration options as attributes on the master switch "
+    "for debugging."
 )
 
 CONF_INITIAL_TRANSITION, DEFAULT_INITIAL_TRANSITION = "initial_transition", 1
 DOCS[CONF_INITIAL_TRANSITION] = (
-    "Duration of the first transition when lights turn "
-    "from `off` to `on` in seconds. ⏲️"
-)
-
-CONF_SLEEP_TRANSITION, DEFAULT_SLEEP_TRANSITION = "sleep_transition", 1
-DOCS[CONF_SLEEP_TRANSITION] = (
-    'Duration of transition when "sleep mode" is toggled in seconds. 😴'
+    "Fade time when a light first turns on, in seconds."
 )
 
 CONF_INTERVAL, DEFAULT_INTERVAL = "interval", 90
-DOCS[CONF_INTERVAL] = "Frequency to adapt the lights, in seconds. 🔄"
+DOCS[CONF_INTERVAL] = "How often to recompute and re-apply the curve, in seconds."
 
 CONF_MAX_BRIGHTNESS, DEFAULT_MAX_BRIGHTNESS = "max_brightness", 100
-DOCS[CONF_MAX_BRIGHTNESS] = "Maximum brightness percentage. 💡"
+DOCS[CONF_MAX_BRIGHTNESS] = "Brightness at the peak of the day, in percent."
 
 CONF_MAX_COLOR_TEMP, DEFAULT_MAX_COLOR_TEMP = "max_color_temp", 5500
-DOCS[CONF_MAX_COLOR_TEMP] = "Coldest color temperature in Kelvin. ❄️"
+DOCS[CONF_MAX_COLOR_TEMP] = "Color temperature at the peak of the day, in Kelvin."
 
-CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS = "min_brightness", 1
-DOCS[CONF_MIN_BRIGHTNESS] = "Minimum brightness percentage. 💡"
+# CDiT default: 5 instead of upstream's 1. 1% reads as off on most bulbs;
+# 5% is the dim-but-visible floor.
+CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS = "min_brightness", 5
+DOCS[CONF_MIN_BRIGHTNESS] = "Brightness during the night, in percent."
 
-CONF_MIN_COLOR_TEMP, DEFAULT_MIN_COLOR_TEMP = "min_color_temp", 2000
-DOCS[CONF_MIN_COLOR_TEMP] = "Warmest color temperature in Kelvin. 🔥"
-
-CONF_ONLY_ONCE, DEFAULT_ONLY_ONCE = "only_once", False
-DOCS[CONF_ONLY_ONCE] = (
-    "Adapt lights only when they are turned on (`true`) or keep adapting them "
-    "(`false`). 🔄"
-)
-
-CONF_ADAPT_ONLY_ON_BARE_TURN_ON, DEFAULT_ADAPT_ONLY_ON_BARE_TURN_ON = (
-    "adapt_only_on_bare_turn_on",
-    False,
-)
-DOCS[CONF_ADAPT_ONLY_ON_BARE_TURN_ON] = (
-    "When turning lights on initially. If set to `true`, AL adapts only if `light.turn_on` is "
-    "invoked without specifying color or brightness. ❌🌈 "
-    "This e.g., prevents adaptation when activating a scene and marks the light as manually controlled. "
-    "If `false`, AL adapts regardless of the presence of color or brightness in the initial `service_data`. "
-    "Needs `take_over_control` enabled. 🕵️"
-)
+# CDiT default: 2200 K instead of upstream's 2000 K. 2000 K reads as
+# sodium-vapor orange; 2200 K is a softer warm-lamp tone.
+CONF_MIN_COLOR_TEMP, DEFAULT_MIN_COLOR_TEMP = "min_color_temp", 2200
+DOCS[CONF_MIN_COLOR_TEMP] = "Color temperature during the night, in Kelvin."
 
 CONF_PREFER_RGB_COLOR, DEFAULT_PREFER_RGB_COLOR = "prefer_rgb_color", False
 DOCS[CONF_PREFER_RGB_COLOR] = (
-    "Whether to prefer RGB color adjustment over "
-    "light color temperature when possible. 🌈"
+    "Prefer RGB color over color temperature when a light supports both."
 )
 
 CONF_SEPARATE_TURN_ON_COMMANDS, DEFAULT_SEPARATE_TURN_ON_COMMANDS = (
@@ -111,136 +79,42 @@ CONF_SEPARATE_TURN_ON_COMMANDS, DEFAULT_SEPARATE_TURN_ON_COMMANDS = (
     False,
 )
 DOCS[CONF_SEPARATE_TURN_ON_COMMANDS] = (
-    "Use separate `light.turn_on` calls for color and brightness, needed for "
-    "some light types. 🔀"
+    "Use separate `light.turn_on` calls for color and brightness. Required "
+    "by some lights that cannot accept both at once."
 )
 
-CONF_SLEEP_BRIGHTNESS, DEFAULT_SLEEP_BRIGHTNESS = "sleep_brightness", 1
-DOCS[CONF_SLEEP_BRIGHTNESS] = "Brightness percentage of lights in sleep mode. 😴"
-
-CONF_SLEEP_COLOR_TEMP, DEFAULT_SLEEP_COLOR_TEMP = "sleep_color_temp", 1000
-DOCS[CONF_SLEEP_COLOR_TEMP] = (
-    "Color temperature in sleep mode (used when `sleep_rgb_or_color_temp` is "
-    "`color_temp`) in Kelvin. 😴"
+CONF_SUNRISE_ENTITY, DEFAULT_SUNRISE_ENTITY = (
+    "sunrise_entity",
+    "sensor.sun_next_rising",
+)
+DOCS[CONF_SUNRISE_ENTITY] = (
+    "Sensor whose state is the next sunrise timestamp. Defaults to the "
+    "built-in `sensor.sun_next_rising`; point at a Sun2 sensor for civil, "
+    "nautical, or astronomical twilight."
 )
 
-CONF_SLEEP_RGB_COLOR, DEFAULT_SLEEP_RGB_COLOR = "sleep_rgb_color", [255, 56, 0]
-DOCS[CONF_SLEEP_RGB_COLOR] = (
-    'RGB color in sleep mode (used when `sleep_rgb_or_color_temp` is "rgb_color"). 🌈'
+CONF_SUNSET_ENTITY, DEFAULT_SUNSET_ENTITY = (
+    "sunset_entity",
+    "sensor.sun_next_setting",
 )
-
-CONF_SLEEP_RGB_OR_COLOR_TEMP, DEFAULT_SLEEP_RGB_OR_COLOR_TEMP = (
-    "sleep_rgb_or_color_temp",
-    "color_temp",
-)
-DOCS[CONF_SLEEP_RGB_OR_COLOR_TEMP] = (
-    'Use either `"rgb_color"` or `"color_temp"` in sleep mode. 🌙'
-)
-
-CONF_SUNRISE_OFFSET, DEFAULT_SUNRISE_OFFSET = "sunrise_offset", 0
-DOCS[CONF_SUNRISE_OFFSET] = (
-    "Adjust sunrise time with a positive or negative offset in seconds. ⏰"
-)
-
-CONF_SUNRISE_TIME = "sunrise_time"
-DOCS[CONF_SUNRISE_TIME] = "Set a fixed time (HH:MM:SS) for sunrise. 🌅"
-
-CONF_MIN_SUNRISE_TIME = "min_sunrise_time"
-DOCS[CONF_MIN_SUNRISE_TIME] = (
-    "Set the earliest virtual sunrise time (HH:MM:SS), allowing for later sunrises. 🌅"
-)
-
-CONF_MAX_SUNRISE_TIME = "max_sunrise_time"
-DOCS[CONF_MAX_SUNRISE_TIME] = (
-    "Set the latest virtual sunrise time (HH:MM:SS), allowing"
-    " for earlier sunrises. 🌅"
-)
-
-CONF_SUNSET_OFFSET, DEFAULT_SUNSET_OFFSET = "sunset_offset", 0
-DOCS[CONF_SUNSET_OFFSET] = (
-    "Adjust sunset time with a positive or negative offset in seconds. ⏰"
-)
-
-CONF_SUNSET_TIME = "sunset_time"
-DOCS[CONF_SUNSET_TIME] = "Set a fixed time (HH:MM:SS) for sunset. 🌇"
-
-CONF_MIN_SUNSET_TIME = "min_sunset_time"
-DOCS[CONF_MIN_SUNSET_TIME] = (
-    "Set the earliest virtual sunset time (HH:MM:SS), allowing for later sunsets. 🌇"
-)
-
-CONF_MAX_SUNSET_TIME = "max_sunset_time"
-DOCS[CONF_MAX_SUNSET_TIME] = (
-    "Set the latest virtual sunset time (HH:MM:SS), allowing for earlier sunsets. 🌇"
-)
-
-CONF_BRIGHTNESS_MODE, DEFAULT_BRIGHTNESS_MODE = "brightness_mode", "default"
-DOCS[CONF_BRIGHTNESS_MODE] = (
-    "Brightness mode to use. Possible values are `default`, `linear`, and `tanh` "
-    "(uses `brightness_mode_time_dark` and `brightness_mode_time_light`). 📈"
-)
-CONF_BRIGHTNESS_MODE_TIME_DARK, DEFAULT_BRIGHTNESS_MODE_TIME_DARK = (
-    "brightness_mode_time_dark",
-    900,
-)
-DOCS[CONF_BRIGHTNESS_MODE_TIME_DARK] = (
-    "(Ignored if `brightness_mode='default'`) The duration in seconds to ramp up/down "
-    "the brightness before/after sunrise/sunset. 📈📉"
-)
-CONF_BRIGHTNESS_MODE_TIME_LIGHT, DEFAULT_BRIGHTNESS_MODE_TIME_LIGHT = (
-    "brightness_mode_time_light",
-    3600,
-)
-DOCS[CONF_BRIGHTNESS_MODE_TIME_LIGHT] = (
-    "(Ignored if `brightness_mode='default'`) The duration in seconds to ramp up/down "
-    "the brightness after/before sunrise/sunset. 📈📉."
-)
-
-CONF_TAKE_OVER_CONTROL, DEFAULT_TAKE_OVER_CONTROL = "take_over_control", True
-DOCS[CONF_TAKE_OVER_CONTROL] = (
-    "Pause adaptation of individual lights and hand over (manual) control to other sources that "
-    "issue `light.turn_on` calls for lights that are on. 🔒"
-)
-
-CONF_TAKE_OVER_CONTROL_MODE, DEFAULT_TAKE_OVER_CONTROL_MODE = (
-    "take_over_control_mode",
-    TakeOverControlMode.PAUSE_ALL.value,
-)
-DOCS[CONF_TAKE_OVER_CONTROL_MODE] = (
-    "The adaptation pausing mode when other sources change brightness and/or color of lights. "
-    "`pause_all` always pauses both brightness and color adaptation. "
-    "`pause_changed` pauses the adaptation of only the changed attributes and continues adapting "
-    "unchanged attributes, e.g., continues color adaptation when only brightness was changed."
+DOCS[CONF_SUNSET_ENTITY] = (
+    "Sensor whose state is the next sunset timestamp. Defaults to the "
+    "built-in `sensor.sun_next_setting`."
 )
 
 CONF_TRANSITION, DEFAULT_TRANSITION = "transition", 45
-DOCS[CONF_TRANSITION] = "Duration of transition when lights change, in seconds. 🕑"
-
-CONF_ADAPT_UNTIL_SLEEP, DEFAULT_ADAPT_UNTIL_SLEEP = (
-    "transition_until_sleep",
-    False,
-)
-DOCS[CONF_ADAPT_UNTIL_SLEEP] = (
-    "When enabled, Adaptive Lighting will treat sleep settings as the minimum, "
-    "transitioning to these values after sunset. 🌙"
-)
+DOCS[CONF_TRANSITION] = "Fade time for each scheduled curve update, in seconds."
 
 CONF_ADAPT_DELAY, DEFAULT_ADAPT_DELAY = "adapt_delay", 0
 DOCS[CONF_ADAPT_DELAY] = (
-    "Wait time (seconds) between light turn on and Adaptive Lighting applying "
-    "changes. Might help to avoid flickering. ⏲️"
+    "Wait time after a light turns on before applying the curve, in seconds. "
+    "Avoids flickering on lights that report 'on' before they have settled."
 )
 
 CONF_SEND_SPLIT_DELAY, DEFAULT_SEND_SPLIT_DELAY = "send_split_delay", 0
 DOCS[CONF_SEND_SPLIT_DELAY] = (
-    "Delay (ms) between `separate_turn_on_commands` for lights that don't support "
-    "simultaneous brightness and color setting. ⏲️"
-)
-
-CONF_AUTORESET_CONTROL, DEFAULT_AUTORESET_CONTROL = "autoreset_control_seconds", 0
-DOCS[CONF_AUTORESET_CONTROL] = (
-    "Automatically reset the manual control after a number of seconds. "
-    "Set to 0 to disable. ⏲️"
+    "Pause between the two `light.turn_on` calls when "
+    "`separate_turn_on_commands` is enabled, in milliseconds."
 )
 
 CONF_SKIP_REDUNDANT_COMMANDS, DEFAULT_SKIP_REDUNDANT_COMMANDS = (
@@ -248,17 +122,15 @@ CONF_SKIP_REDUNDANT_COMMANDS, DEFAULT_SKIP_REDUNDANT_COMMANDS = (
     False,
 )
 DOCS[CONF_SKIP_REDUNDANT_COMMANDS] = (
-    "Skip sending adaptation commands whose target state already "
-    "equals the light's known state. Minimizes network traffic and improves the "
-    "adaptation responsivity in some situations. 📉"
-    "Disable if physical light states get out of sync with HA's recorded state."
+    "Don't send a command when the light is already at the target state. "
+    "Cuts traffic; disable if HA's recorded state drifts from the physical "
+    "light."
 )
 
 CONF_INTERCEPT, DEFAULT_INTERCEPT = "intercept", True
 DOCS[CONF_INTERCEPT] = (
-    "Intercept and adapt `light.turn_on` calls to enabling instantaneous color "
-    "and brightness adaptation. 🏎️ Disable for lights that do not "
-    "support `light.turn_on` with color and brightness."
+    "Intercept `light.turn_on` calls to apply the curve instantly, instead "
+    "of waiting for the next scheduled update."
 )
 
 CONF_MULTI_LIGHT_INTERCEPT, DEFAULT_MULTI_LIGHT_INTERCEPT = (
@@ -266,52 +138,39 @@ CONF_MULTI_LIGHT_INTERCEPT, DEFAULT_MULTI_LIGHT_INTERCEPT = (
     True,
 )
 DOCS[CONF_MULTI_LIGHT_INTERCEPT] = (
-    "Intercept and adapt `light.turn_on` calls that target multiple lights. ➗"
-    "⚠️ This might result in splitting up a single `light.turn_on` call "
-    "into multiple calls, e.g., when lights are in different switches. "
+    "Also intercept `light.turn_on` calls that target multiple lights. "
     "Requires `intercept` to be enabled."
 )
 
-SLEEP_MODE_SWITCH = "sleep_mode_switch"
+# Switch identifiers used as suffixes on each AL profile's entities.
+# Sleep-mode switch (`SLEEP_MODE_SWITCH`) is intentionally removed in this
+# fork — see design.md decision 7.
 ADAPT_COLOR_SWITCH = "adapt_color_switch"
 ADAPT_BRIGHTNESS_SWITCH = "adapt_brightness_switch"
 ATTR_ADAPTIVE_LIGHTING_MANAGER = "manager"
 UNDO_UPDATE_LISTENER = "undo_update_listener"
-NONE_STR = "None"
-ATTR_ADAPT_COLOR = "adapt_color"
-DOCS[ATTR_ADAPT_COLOR] = "Whether to adapt the color on supporting lights. 🌈"
-ATTR_ADAPT_BRIGHTNESS = "adapt_brightness"
-DOCS[ATTR_ADAPT_BRIGHTNESS] = "Whether to adapt the brightness of the light. 🌞"
 
-SERVICE_SET_MANUAL_CONTROL = "set_manual_control"
-CONF_MANUAL_CONTROL = "manual_control"
-DOCS[CONF_MANUAL_CONTROL] = "Whether to manually control the lights. 🔒"
+ATTR_ADAPT_COLOR = "adapt_color"
+DOCS[ATTR_ADAPT_COLOR] = "Adjust the color of supporting lights over the day."
+ATTR_ADAPT_BRIGHTNESS = "adapt_brightness"
+DOCS[ATTR_ADAPT_BRIGHTNESS] = "Adjust the brightness of supporting lights over the day."
+
 SERVICE_APPLY = "apply"
 CONF_TURN_ON_LIGHTS = "turn_on_lights"
-DOCS[CONF_TURN_ON_LIGHTS] = "Whether to turn on lights that are currently off. 🔆"
+DOCS[CONF_TURN_ON_LIGHTS] = "Also turn on any targeted lights that are currently off."
 SERVICE_CHANGE_SWITCH_SETTINGS = "change_switch_settings"
 CONF_USE_DEFAULTS = "use_defaults"
 DOCS[CONF_USE_DEFAULTS] = (
-    "Sets the default values not specified in this service call. Options: "
-    '"current" (default, retains current values), "factory" (resets to '
-    'documented defaults), or "configuration" (reverts to switch config defaults). ⚙️'
+    'Source for any field not supplied in this call: '
+    '"current" (keep existing values), "factory" (documented defaults), '
+    'or "configuration" (the profile\'s own configured defaults).'
 )
 
 TURNING_OFF_DELAY = 5
 
-DOCS_MANUAL_CONTROL = {
-    CONF_ENTITY_ID: "The `entity_id` of the switch in which to (un)mark the "
-    "light as being `manually controlled`. 📝",
-    CONF_LIGHTS: "entity_id(s) of lights, if not specified, all lights in the "
-    "switch are selected. 💡",
-    CONF_MANUAL_CONTROL: 'Whether to add ("true") or remove ("false") all '
-    'adapted attributes of the light from the "manual_control" list, or the '
-    "name of an attribute for selective addition. 🔒",
-}
-
 DOCS_APPLY = {
-    CONF_ENTITY_ID: "The `entity_id` of the switch with the settings to apply. 📝",
-    CONF_LIGHTS: "A light (or list of lights) to apply the settings to. 💡",
+    CONF_ENTITY_ID: "The master switch whose curve settings to apply.",
+    CONF_LIGHTS: "Lights to apply the settings to.",
 }
 
 
@@ -320,6 +179,10 @@ def int_between(min_int: int, max_int: int) -> vol.All:
     return vol.All(vol.Coerce(int), vol.Range(min=min_int, max=max_int))
 
 
+# Per-field validation tuples driving YAML import and (via maybe_coerce)
+# the YAML schema. The UI options flow does not consume this list directly;
+# config_flow.py hand-shapes its sections via HA selectors. Eighteen entries:
+# 16 retained from upstream + 2 new sun-entity fields.
 VALIDATION_TUPLES: list[tuple[str, Any, Any]] = [
     (CONF_LIGHTS, DEFAULT_LIGHTS, cv.entity_ids),  # type: ignore[arg-type]
     (CONF_INTERVAL, DEFAULT_INTERVAL, cv.positive_int),
@@ -330,78 +193,12 @@ VALIDATION_TUPLES: list[tuple[str, Any, Any]] = [
     (CONF_MIN_COLOR_TEMP, DEFAULT_MIN_COLOR_TEMP, int_between(1000, 10000)),
     (CONF_MAX_COLOR_TEMP, DEFAULT_MAX_COLOR_TEMP, int_between(1000, 10000)),
     (CONF_PREFER_RGB_COLOR, DEFAULT_PREFER_RGB_COLOR, bool),
-    (CONF_SLEEP_BRIGHTNESS, DEFAULT_SLEEP_BRIGHTNESS, int_between(1, 100)),
-    (
-        CONF_SLEEP_RGB_OR_COLOR_TEMP,
-        DEFAULT_SLEEP_RGB_OR_COLOR_TEMP,
-        selector.SelectSelector(  # type: ignore[arg-type]
-            selector.SelectSelectorConfig(
-                options=["color_temp", "rgb_color"],
-                multiple=False,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            ),
-        ),
-    ),
-    (CONF_SLEEP_COLOR_TEMP, DEFAULT_SLEEP_COLOR_TEMP, int_between(1000, 10000)),
-    (
-        CONF_SLEEP_RGB_COLOR,
-        DEFAULT_SLEEP_RGB_COLOR,
-        selector.ColorRGBSelector(selector.ColorRGBSelectorConfig()),  # type: ignore[arg-type]
-    ),
-    (CONF_SLEEP_TRANSITION, DEFAULT_SLEEP_TRANSITION, VALID_TRANSITION),
-    (CONF_ADAPT_UNTIL_SLEEP, DEFAULT_ADAPT_UNTIL_SLEEP, bool),
-    (CONF_SUNRISE_TIME, NONE_STR, str),
-    (CONF_MIN_SUNRISE_TIME, NONE_STR, str),
-    (CONF_MAX_SUNRISE_TIME, NONE_STR, str),
-    (CONF_SUNRISE_OFFSET, DEFAULT_SUNRISE_OFFSET, int),
-    (CONF_SUNSET_TIME, NONE_STR, str),
-    (CONF_MIN_SUNSET_TIME, NONE_STR, str),
-    (CONF_MAX_SUNSET_TIME, NONE_STR, str),
-    (CONF_SUNSET_OFFSET, DEFAULT_SUNSET_OFFSET, int),
-    (
-        CONF_BRIGHTNESS_MODE,
-        DEFAULT_BRIGHTNESS_MODE,
-        selector.SelectSelector(  # type: ignore[arg-type]
-            selector.SelectSelectorConfig(
-                options=["default", "linear", "tanh"],
-                multiple=False,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            ),
-        ),
-    ),
-    (CONF_BRIGHTNESS_MODE_TIME_DARK, DEFAULT_BRIGHTNESS_MODE_TIME_DARK, int),
-    (CONF_BRIGHTNESS_MODE_TIME_LIGHT, DEFAULT_BRIGHTNESS_MODE_TIME_LIGHT, int),
-    (CONF_TAKE_OVER_CONTROL, DEFAULT_TAKE_OVER_CONTROL, bool),
-    (
-        CONF_TAKE_OVER_CONTROL_MODE,
-        DEFAULT_TAKE_OVER_CONTROL_MODE,
-        selector.SelectSelector(  # type: ignore[arg-type]
-            selector.SelectSelectorConfig(
-                options=[
-                    TakeOverControlMode.PAUSE_ALL.value,
-                    TakeOverControlMode.PAUSE_CHANGED.value,
-                ],
-                multiple=False,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            ),
-        ),
-    ),
-    (CONF_DETECT_NON_HA_CHANGES, DEFAULT_DETECT_NON_HA_CHANGES, bool),
-    (
-        CONF_AUTORESET_CONTROL,
-        DEFAULT_AUTORESET_CONTROL,
-        int_between(0, 365 * 24 * 60 * 60),  # 1 year max
-    ),
-    (CONF_ONLY_ONCE, DEFAULT_ONLY_ONCE, bool),
-    (CONF_ADAPT_ONLY_ON_BARE_TURN_ON, DEFAULT_ADAPT_ONLY_ON_BARE_TURN_ON, bool),
+    (CONF_SUNRISE_ENTITY, DEFAULT_SUNRISE_ENTITY, cv.entity_id),
+    (CONF_SUNSET_ENTITY, DEFAULT_SUNSET_ENTITY, cv.entity_id),
     (CONF_SEPARATE_TURN_ON_COMMANDS, DEFAULT_SEPARATE_TURN_ON_COMMANDS, bool),
     (CONF_SEND_SPLIT_DELAY, DEFAULT_SEND_SPLIT_DELAY, int_between(0, 10000)),
     (CONF_ADAPT_DELAY, DEFAULT_ADAPT_DELAY, cv.positive_float),
-    (
-        CONF_SKIP_REDUNDANT_COMMANDS,
-        DEFAULT_SKIP_REDUNDANT_COMMANDS,
-        bool,
-    ),
+    (CONF_SKIP_REDUNDANT_COMMANDS, DEFAULT_SKIP_REDUNDANT_COMMANDS, bool),
     (CONF_INTERCEPT, DEFAULT_INTERCEPT, bool),
     (CONF_MULTI_LIGHT_INTERCEPT, DEFAULT_MULTI_LIGHT_INTERCEPT, bool),
     (CONF_INCLUDE_CONFIG_IN_ATTRIBUTES, DEFAULT_INCLUDE_CONFIG_IN_ATTRIBUTES, bool),
@@ -409,27 +206,15 @@ VALIDATION_TUPLES: list[tuple[str, Any, Any]] = [
 
 
 def timedelta_as_int(value: timedelta) -> float:
-    """Convert a `datetime.timedelta` object to an integer.
-
-    This integer can be serialized to json but a timedelta cannot.
-    """
+    """Convert a `datetime.timedelta` object to an integer."""
     return value.total_seconds()
 
 
-# conf_option: (validator, coerce) tuples
-# these validators cannot be serialized but can be serialized when coerced by coerce.
+# Only CONF_INTERVAL still needs YAML-time coercion (HA accepts strings like
+# "00:01:30" and turns them into timedeltas). All other coerced fields
+# (sun times, brightness-mode windows) were removed.
 EXTRA_VALIDATION: dict[str, tuple[Any, Any]] = {
     CONF_INTERVAL: (cv.time_period, timedelta_as_int),
-    CONF_SUNRISE_OFFSET: (cv.time_period, timedelta_as_int),
-    CONF_SUNRISE_TIME: (cv.time, str),
-    CONF_MIN_SUNRISE_TIME: (cv.time, str),
-    CONF_MAX_SUNRISE_TIME: (cv.time, str),
-    CONF_SUNSET_OFFSET: (cv.time_period, timedelta_as_int),
-    CONF_SUNSET_TIME: (cv.time, str),
-    CONF_MIN_SUNSET_TIME: (cv.time, str),
-    CONF_MAX_SUNSET_TIME: (cv.time, str),
-    CONF_BRIGHTNESS_MODE_TIME_LIGHT: (cv.time_period, timedelta_as_int),
-    CONF_BRIGHTNESS_MODE_TIME_DARK: (cv.time_period, timedelta_as_int),
 }
 
 
@@ -441,11 +226,6 @@ def maybe_coerce(key: str, validation: Any) -> vol.All | Any:
     return validation
 
 
-def replace_none_str(value: Any, replace_with: Any | None = None) -> Any:
-    """Replace "None" -> replace_with."""
-    return value if value != NONE_STR else replace_with
-
-
 _yaml_validation_tuples = [
     (key, default, maybe_coerce(key, validation))
     for key, default, validation in VALIDATION_TUPLES
@@ -453,7 +233,7 @@ _yaml_validation_tuples = [
 
 _DOMAIN_SCHEMA = vol.Schema(
     {
-        vol.Optional(key, default=replace_none_str(default, vol.UNDEFINED)): validation
+        vol.Optional(key, default=default): validation
         for key, default, validation in _yaml_validation_tuples
     },
 )
@@ -475,15 +255,3 @@ def apply_service_schema(initial_transition: int = 1) -> vol.Schema:
             vol.Optional(CONF_TURN_ON_LIGHTS, default=False): cv.boolean,
         },
     )
-
-
-SET_MANUAL_CONTROL_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_ENTITY_ID): cv.entity_ids,  # type: ignore[arg-type]
-        vol.Optional(CONF_LIGHTS, default=[]): cv.entity_ids,  # type: ignore[arg-type]
-        vol.Optional(CONF_MANUAL_CONTROL, default=True): vol.Any(
-            cv.boolean,
-            vol.In(["brightness", "color"]),
-        ),
-    },
-)
