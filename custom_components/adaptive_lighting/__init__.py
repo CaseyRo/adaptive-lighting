@@ -98,18 +98,25 @@ def _remove_orphan_sleep_entities(
         registry.async_remove(entity_id)
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Reject older config-entry versions with a friendly recreate message.
+
+    Spec R8 + design D4: this fork deliberately does not migrate upstream
+    entries. Define a migration handler so HA routes version mismatches
+    here (instead of logging the generic "Migration handler not found")
+    and surface a `ConfigEntryError` whose message tells the user what to
+    do.
+    """
+    msg = (
+        f"Adaptive Lighting v{CONFIG_ENTRY_VERSION} (CDiT fork) is incompatible "
+        f"with the existing config entry (version {config_entry.version}). "
+        "Delete the entry and recreate it from Settings → Devices & Services."
+    )
+    raise ConfigEntryError(msg)
+
+
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up the component."""
-    # Spec R8 + design D4: reject entries from older, incompatible versions
-    # with a clear "recreate this entry" message rather than silently migrating.
-    if config_entry.version < CONFIG_ENTRY_VERSION:
-        msg = (
-            f"Adaptive Lighting v{CONFIG_ENTRY_VERSION} (CDiT fork) is incompatible "
-            f"with the existing config entry (version {config_entry.version}). "
-            "Delete and recreate the entry from Settings → Devices & Services."
-        )
-        raise ConfigEntryError(msg)
-
     _remove_orphan_sleep_entities(hass, config_entry)
 
     data = hass.data.setdefault(DOMAIN, {})

@@ -28,6 +28,11 @@ dev = [
     "pre-commit",
     "ruff",
 ]
+test = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "pytest-homeassistant-custom-component",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["custom_components/adaptive_lighting"]

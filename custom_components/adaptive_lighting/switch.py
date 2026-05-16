@@ -344,17 +344,8 @@ async def async_setup_entry(  # noqa: PLR0915
         data,
         config_entry,
     )
-    if (  # Skip deleted YAML config entries or first time YAML config entries
-        config_entry.source == SOURCE_IMPORT
-        and config_entry.unique_id not in data.get("__yaml__", set())
-    ):
-        _LOGGER.warning(
-            "Deleting AdaptiveLighting switch '%s' because YAML"
-            " defined switch has been removed from YAML configuration",
-            config_entry.unique_id,
-        )
-        await hass.config_entries.async_remove(config_entry.entry_id)
-        return
+    # CDiT fork: YAML-managed entries load normally; their options dialog
+    # aborts via the `yaml_managed` reason (spec R7).
 
     if (manager := data.get(ATTR_ADAPTIVE_LIGHTING_MANAGER)) is None:
         manager = AdaptiveLightingManager(hass)

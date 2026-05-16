@@ -1,209 +1,163 @@
+"""Tests for the CDiT tanh curve in color_and_brightness.py.
+
+Covers spec R4 scenarios: brightness is min before sunrise, midpoint at the
+sunrise event, max during the day, and the same curve shape applies to
+color temperature. Curve math is pure; no Home Assistant needed.
+"""
+
+from __future__ import annotations
+
 import datetime as dt
-import zoneinfo
+from datetime import UTC, timedelta
 
 import pytest
-from astral import LocationInfo
-from astral.location import Location
-from homeassistant.components.adaptive_lighting.color_and_brightness import (
-    SunEvent,
-    SunEvents,
+from custom_components.adaptive_lighting.color_and_brightness import (
+    SunLightSettings,
+    _tanh_day_curve,
 )
 
-# Create a mock astral_location object
-location = Location(LocationInfo())
 
-LAT_LONG_TZS = [
-    (52.379189, 4.899431, "Europe/Amsterdam"),
-    (32.87336, -117.22743, "US/Pacific"),
-    (60, 50, "GMT"),
-    (60, 50, "UTC"),
-]
+HALF_WIDTH = 1800  # seconds — matches RAMP_HALF_WIDTH_SECONDS
+
+# Fixed reference day: 2026-03-21 in UTC, sunrise 06:00, sunset 18:00.
+T_SUNRISE = dt.datetime(2026, 3, 21, 6, 0, 0, tzinfo=UTC)
+T_SUNSET = dt.datetime(2026, 3, 21, 18, 0, 0, tzinfo=UTC)
 
 
-@pytest.fixture(params=LAT_LONG_TZS)
-def tzinfo_and_location(request):
-    lat, long, timezone = request.param
-    tzinfo = zoneinfo.ZoneInfo(timezone)
-    location = Location(
-        LocationInfo(
-            name="name",
-            region="region",
-            timezone=timezone,
-            latitude=lat,
-            longitude=long,
-        ),
-    )
-    return tzinfo, location
-
-
-def test_replace_time(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
-    sun_events = SunEvents(
+@pytest.fixture
+def settings() -> SunLightSettings:
+    """Standard CDiT defaults — 5–100 % brightness, 2200–5500 K."""
+    return SunLightSettings(
         name="test",
-        astral_location=location,
-        sunrise_time=None,
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=None,
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
+        min_brightness=5,
+        max_brightness=100,
+        min_color_temp=2200,
+        max_color_temp=5500,
+        ramp_half_width_seconds=HALF_WIDTH,
     )
 
-    new_time = dt.time(5, 30)
-    datetime = dt.datetime(2022, 1, 1)
-    replaced_time_utc = sun_events._replace_time(datetime.date(), new_time)
-    assert replaced_time_utc.astimezone(tzinfo).time() == new_time
+
+class TestBrightnessCurve:
+    """Spec R4: piecewise tanh ramp around the two sun events."""
+
+    def test_min_brightness_more_than_half_width_before_sunrise(self, settings):
+        """t = sunrise − 2h → still deep night, brightness at minimum."""
+        t = T_SUNRISE - timedelta(hours=2)
+        assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
+
+    def test_min_brightness_exactly_at_clamp_boundary(self, settings):
+        """t = sunrise − half_width → exactly at the boundary, still min."""
+        t = T_SUNRISE - timedelta(seconds=HALF_WIDTH)
+        assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
+
+    def test_midpoint_at_sunrise_event(self, settings):
+        """t = sunrise → exactly the midpoint of min and max by tanh symmetry."""
+        b = settings.brightness_pct(T_SUNRISE, T_SUNRISE, T_SUNSET)
+        expected_mid = (5 + 100) / 2
+        assert abs(b - expected_mid) < 0.5
+
+    def test_max_brightness_30min_after_sunrise(self, settings):
+        """t = sunrise + half_width → fully ramped, brightness at max."""
+        t = T_SUNRISE + timedelta(seconds=HALF_WIDTH)
+        assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 100
+
+    def test_max_brightness_during_full_day(self, settings):
+        """Mid-afternoon → still at max."""
+        t = T_SUNRISE + timedelta(hours=6)  # noon
+        assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 100
+
+    def test_min_brightness_long_after_sunset(self, settings):
+        """t = sunset + 2h → back to minimum."""
+        t = T_SUNSET + timedelta(hours=2)
+        assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
+
+    def test_midpoint_at_sunset_event(self, settings):
+        """t = sunset → exact midpoint going down."""
+        b = settings.brightness_pct(T_SUNSET, T_SUNRISE, T_SUNSET)
+        expected_mid = (5 + 100) / 2
+        assert abs(b - expected_mid) < 0.5
 
 
-def test_sunrise_without_offset(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
+class TestColorTempCurve:
+    """Spec R4: color temperature follows the same shape as brightness."""
 
-    sun_events = SunEvents(
-        name="test",
-        astral_location=location,
-        sunrise_time=None,
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=None,
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
-    )
-    date = dt.datetime(2022, 1, 1).date()
-    result = sun_events.sunrise(date)
-    assert result == location.sunrise(date)
+    def test_min_color_temp_at_night(self, settings):
+        t = T_SUNRISE - timedelta(hours=3)
+        # Color temp rounds to nearest 5, so 2200 stays 2200.
+        assert settings.color_temp_kelvin(t, T_SUNRISE, T_SUNSET) == 2200
 
+    def test_max_color_temp_at_noon(self, settings):
+        t = T_SUNRISE + timedelta(hours=6)
+        assert settings.color_temp_kelvin(t, T_SUNRISE, T_SUNSET) == 5500
 
-def test_sun_position_no_fixed_sunset_and_sunrise(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
-    sun_events = SunEvents(
-        name="test",
-        astral_location=location,
-        sunrise_time=None,
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=None,
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
-    )
-    date = dt.datetime(2022, 1, 1).date()
-    sunset = location.sunset(date)
-    position = sun_events.sun_position(sunset)
-    assert position == 0
-    sunrise = location.sunrise(date)
-    position = sun_events.sun_position(sunrise)
-    assert position == 0
-    noon = location.noon(date)
-    position = sun_events.sun_position(noon)
-    assert position == 1
-    midnight = location.midnight(date)
-    position = sun_events.sun_position(midnight)
-    assert position == -1
+    def test_same_curve_shape_as_brightness(self, settings):
+        """At any ramp-window point, the fraction of the curve should match
+        between brightness (5-100) and color temp (2200-5500)."""
+        # Pick a point inside the sunrise ramp window.
+        t = T_SUNRISE + timedelta(minutes=10)
+        b = settings.brightness_pct(t, T_SUNRISE, T_SUNSET)
+        ct = settings.color_temp_kelvin(t, T_SUNRISE, T_SUNSET)
+        # fraction of brightness range
+        b_frac = (b - 5) / (100 - 5)
+        # corresponding raw color-temp before nearest-5 rounding
+        ct_expected_raw = settings.min_color_temp + b_frac * 3300
+        # allow ±5 K tolerance for the rounding
+        assert ct_expected_raw - 5 <= ct <= ct_expected_raw + 5
 
 
-def test_sun_position_fixed_sunset_and_sunrise(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
-    sun_events = SunEvents(
-        name="test",
-        astral_location=location,
-        sunrise_time=dt.time(6, 0),
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=dt.time(18, 0),
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
-    )
-    date = dt.datetime(2022, 1, 1).date()
-    sunset = sun_events.sunset(date)
-    position = sun_events.sun_position(sunset)
-    assert position == 0
-    sunrise = sun_events.sunrise(date)
-    position = sun_events.sun_position(sunrise)
-    assert position == 0
-    noon, midnight = sun_events.noon_and_midnight(date)
-    position = sun_events.sun_position(noon)
-    assert position == 1
-    position = sun_events.sun_position(midnight)
-    assert position == -1
+class TestSunPosition:
+    """Synthetic sun position derived from the brightness curve."""
+
+    def test_minus_one_at_night(self, settings):
+        t = T_SUNRISE - timedelta(hours=3)
+        assert settings.sun_position(t, T_SUNRISE, T_SUNSET) == -1.0
+
+    def test_plus_one_at_noon(self, settings):
+        t = T_SUNRISE + timedelta(hours=6)
+        assert settings.sun_position(t, T_SUNRISE, T_SUNSET) == 1.0
+
+    def test_zero_at_event(self, settings):
+        # By tanh symmetry, sun_position at the event is ~0.
+        sp = settings.sun_position(T_SUNRISE, T_SUNRISE, T_SUNSET)
+        assert abs(sp) < 0.02
 
 
-def test_noon_and_midnight(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
-    sun_events = SunEvents(
-        name="test",
-        astral_location=location,
-        sunrise_time=None,
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=None,
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
-    )
-    date = dt.datetime(2022, 1, 1)
-    noon, midnight = sun_events.noon_and_midnight(date)
-    assert noon == location.noon(date)
-    assert midnight == location.midnight(date)
+class TestTanhDayCurveDirect:
+    """Direct unit tests for the curve helper, without SunLightSettings."""
 
+    def test_below_window(self):
+        t = T_SUNRISE.timestamp() - HALF_WIDTH - 1
+        v = _tanh_day_curve(
+            t,
+            T_SUNRISE.timestamp(),
+            T_SUNSET.timestamp(),
+            value_min=0,
+            value_max=100,
+            half_width=HALF_WIDTH,
+        )
+        assert v == 0
 
-def test_sun_events(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
-    sun_events = SunEvents(
-        name="test",
-        astral_location=location,
-        sunrise_time=None,
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=None,
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
-    )
+    def test_above_window(self):
+        t = T_SUNSET.timestamp() + HALF_WIDTH + 1
+        v = _tanh_day_curve(
+            t,
+            T_SUNRISE.timestamp(),
+            T_SUNSET.timestamp(),
+            value_min=0,
+            value_max=100,
+            half_width=HALF_WIDTH,
+        )
+        assert v == 0
 
-    date = dt.datetime(2022, 1, 1)
-    events = sun_events.sun_events(date)
-    assert len(events) == 4
-    assert (SunEvent.SUNRISE, location.sunrise(date).timestamp()) in events
-
-
-def test_prev_and_next_events(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
-    sun_events = SunEvents(
-        name="test",
-        astral_location=location,
-        sunrise_time=None,
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=None,
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
-    )
-    datetime = dt.datetime(2022, 1, 1, 10, 0)
-    after_sunrise = sun_events.sunrise(datetime.date()) + dt.timedelta(hours=1)
-    prev_event, next_event = sun_events.prev_and_next_events(after_sunrise)
-    assert prev_event[0] == SunEvent.SUNRISE
-    assert next_event[0] == SunEvent.NOON
-
-
-def test_closest_event(tzinfo_and_location):
-    tzinfo, location = tzinfo_and_location
-    sun_events = SunEvents(
-        name="test",
-        astral_location=location,
-        sunrise_time=None,
-        min_sunrise_time=None,
-        max_sunrise_time=None,
-        sunset_time=None,
-        min_sunset_time=None,
-        max_sunset_time=None,
-        timezone=tzinfo,
-    )
-    datetime = dt.datetime(2022, 1, 1, 6, 0)
-    sunrise = sun_events.sunrise(datetime.date())
-    event_name, ts = sun_events.closest_event(sunrise)
-    assert event_name == SunEvent.SUNRISE
-    assert ts == location.sunrise(sunrise.date()).timestamp()
+    def test_during_day_hold(self):
+        # Mid-afternoon, well inside the day window.
+        t = T_SUNRISE.timestamp() + 4 * 3600
+        v = _tanh_day_curve(
+            t,
+            T_SUNRISE.timestamp(),
+            T_SUNSET.timestamp(),
+            value_min=0,
+            value_max=100,
+            half_width=HALF_WIDTH,
+        )
+        assert v == 100

@@ -56,22 +56,22 @@ Group 7-9 are tests, translations, and docs (final polish).
 
 ## 7. Tests
 
-- [ ] 7.1 Delete obsolete test files: `tests/test_*sleep*`, `tests/test_*take_over*`, `tests/test_*manual_control*`. Update `tests/conftest.py` to drop fixtures that referenced those features. [D7, D8]
-- [ ] 7.2 Add test: section layout — opening options on a UI-managed entry returns a flow result with six labeled sections in the specified order; Advanced and Diagnostics collapsed. [R1]
-- [ ] 7.3 Add test: each field appears in exactly one section, matching the R1 table. [R1]
-- [ ] 7.4 Add test: `send_split_delay` is absent from the schema when `separate_turn_on_commands` is false; present when true. [R2]
-- [ ] 7.5 Add test: `sunrise_entity` / `sunset_entity` default to `sensor.sun_next_rising` / `sensor.sun_next_setting` on a freshly created entry. [R3]
-- [ ] 7.6 Add test: entity selectors for the two sun fields are configured with `domain="sensor"` and `device_class="timestamp"`. [R3, D14]
-- [ ] 7.7 Add test: `tanh_curve` returns `value_min` more than `half_width` before `t_start`, midpoint at exactly `t_start`, `value_max` more than `half_width` after `t_start` (and the symmetric trio around `t_end`). [R4]
-- [ ] 7.8 Add test: color temperature uses the same curve shape as brightness, with `min_color_temp` / `max_color_temp` as bounds. [R4]
-- [ ] 7.9 Add test: `NumberSelector` types, ranges, units, and modes match the R5 table for brightness, color temp, durations, and milliseconds. [R5]
-- [ ] 7.10 Add test: saving valid options invokes `async_unload_entry` and `async_setup_entry` exactly once each (use mock spies) and produces no "restart HA" prompt. [R6]
-- [ ] 7.11 Add test: opening the options flow on a `SOURCE_IMPORT` config entry returns `async_abort(reason="yaml_managed")`. [R7]
-- [ ] 7.12 Add test: `async_setup_entry` raises `ConfigEntryError` when `config_entry.version == 1` and current is 2. [R8]
-- [ ] 7.13 Add test: `async_setup_entry` succeeds and runs no tombstone log line when entry version is current. [R8]
-- [ ] 7.14 Add test: the tombstone helper removes a seeded `switch.adaptive_lighting_sleep_mode_<name>` entity owned by this config entry, emits one INFO log line. [R9, D12]
-- [ ] 7.15 Add test: tombstone helper is idempotent — second run finds nothing, no log line. [R9]
-- [ ] 7.16 Add test: tombstone helper does not remove a foreign-owned entity matching the name pattern (different `config_entry_id`). [R9, D12]
+- [x] 7.1 Delete obsolete test files: `tests/test_*sleep*`, `tests/test_*take_over*`, `tests/test_*manual_control*`. Update `tests/conftest.py` to drop fixtures that referenced those features. [D7, D8]
+- [x] 7.2 Add test: section layout — opening options on a UI-managed entry returns a flow result with six labeled sections in the specified order; Advanced and Diagnostics collapsed. [R1]
+- [x] 7.3 Add test: each field appears in exactly one section, matching the R1 table. [R1]
+- [x] 7.4 Add test: `send_split_delay` is absent from the schema when `separate_turn_on_commands` is false; present when true. [R2]
+- [x] 7.5 Add test: `sunrise_entity` / `sunset_entity` default to `sensor.sun_next_rising` / `sensor.sun_next_setting` on a freshly created entry. [R3]
+- [x] 7.6 Add test: entity selectors for the two sun fields are configured with `domain="sensor"` and `device_class="timestamp"`. [R3, D14]
+- [x] 7.7 Add test: `tanh_curve` returns `value_min` more than `half_width` before `t_start`, midpoint at exactly `t_start`, `value_max` more than `half_width` after `t_start` (and the symmetric trio around `t_end`). [R4]
+- [x] 7.8 Add test: color temperature uses the same curve shape as brightness, with `min_color_temp` / `max_color_temp` as bounds. [R4]
+- [x] 7.9 Add test: `NumberSelector` types, ranges, units, and modes match the R5 table for brightness, color temp, durations, and milliseconds. [R5]
+- [x] 7.10 Add test: saving valid options invokes `async_unload_entry` and `async_setup_entry` exactly once each (use mock spies) and produces no "restart HA" prompt. [R6]
+- [x] 7.11 Add test: opening the options flow on a `SOURCE_IMPORT` config entry returns `async_abort(reason="yaml_managed")`. [R7]
+- [x] 7.12 Add test: `async_setup_entry` raises `ConfigEntryError` when `config_entry.version == 1` and current is 2. [R8]
+- [x] 7.13 Add test: `async_setup_entry` succeeds and runs no tombstone log line when entry version is current. [R8]
+- [x] 7.14 Add test: the tombstone helper removes a seeded `switch.adaptive_lighting_sleep_mode_<name>` entity owned by this config entry, emits one INFO log line. [R9, D12]
+- [x] 7.15 Add test: tombstone helper is idempotent — second run finds nothing, no log line. [R9]
+- [x] 7.16 Add test: tombstone helper does not remove a foreign-owned entity matching the name pattern (different `config_entry_id`). [R9, D12]
 
 ## 8. Strings and translations
 

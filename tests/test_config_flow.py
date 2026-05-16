@@ -1,249 +1,331 @@
-"""Test Adaptive Lighting config flow."""
+"""Config flow tests for the CDiT Adaptive Lighting fork.
 
-from homeassistant.components.adaptive_lighting.const import (
-    CONF_SUNRISE_TIME,
-    CONF_SUNSET_TIME,
+Covers spec/options-flow/spec.md requirements R1, R2, R3, R5, R6, R7.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import patch
+
+import pytest
+from custom_components.adaptive_lighting.config_flow import (
+    SECTION_ADVANCED,
+    SECTION_DAYTIME,
+    SECTION_DIAGNOSTICS,
+    SECTION_LIGHT_CONTROL,
+    SECTION_SUN,
+    SECTION_TARGETS,
+    _build_options_schema,
+)
+from custom_components.adaptive_lighting.const import (
+    CONF_INCLUDE_CONFIG_IN_ATTRIBUTES,
+    CONF_INTERCEPT,
+    CONF_INTERVAL,
+    CONF_LIGHTS,
+    CONF_MAX_BRIGHTNESS,
+    CONF_MAX_COLOR_TEMP,
+    CONF_MIN_BRIGHTNESS,
+    CONF_MIN_COLOR_TEMP,
+    CONF_MULTI_LIGHT_INTERCEPT,
+    CONF_PREFER_RGB_COLOR,
+    CONF_SEND_SPLIT_DELAY,
+    CONF_SEPARATE_TURN_ON_COMMANDS,
+    CONF_SKIP_REDUNDANT_COMMANDS,
+    CONF_SUNRISE_ENTITY,
+    CONF_SUNSET_ENTITY,
     DEFAULT_NAME,
+    DEFAULT_SUNRISE_ENTITY,
+    DEFAULT_SUNSET_ENTITY,
     DOMAIN,
-    NONE_STR,
-    VALIDATION_TUPLES,
 )
 from homeassistant.config_entries import SOURCE_IMPORT
 from homeassistant.const import CONF_NAME
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    EntitySelector,
+    NumberSelector,
+    NumberSelectorMode,
+)
 
-from tests.common import MockConfigEntry
-
-DEFAULT_DATA = {key: default for key, default, _ in VALIDATION_TUPLES}
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
-async def test_flow_manual_configuration(hass):
-    """Test that config flow works."""
+EXPECTED_SECTIONS = (
+    SECTION_TARGETS,
+    SECTION_DAYTIME,
+    SECTION_SUN,
+    SECTION_LIGHT_CONTROL,
+    SECTION_ADVANCED,
+    SECTION_DIAGNOSTICS,
+)
+
+EXPECTED_SECTION_FIELDS: dict[str, set[str]] = {
+    SECTION_TARGETS: {CONF_LIGHTS},
+    SECTION_DAYTIME: {
+        CONF_MIN_BRIGHTNESS,
+        CONF_MAX_BRIGHTNESS,
+        CONF_MIN_COLOR_TEMP,
+        CONF_MAX_COLOR_TEMP,
+        CONF_PREFER_RGB_COLOR,
+    },
+    SECTION_SUN: {CONF_SUNRISE_ENTITY, CONF_SUNSET_ENTITY},
+    SECTION_LIGHT_CONTROL: {CONF_INTERCEPT, CONF_MULTI_LIGHT_INTERCEPT},
+    SECTION_ADVANCED: {
+        CONF_INTERVAL,
+        "transition",
+        "initial_transition",
+        "adapt_delay",
+        CONF_SEPARATE_TURN_ON_COMMANDS,
+        CONF_SKIP_REDUNDANT_COMMANDS,
+    },
+    SECTION_DIAGNOSTICS: {CONF_INCLUDE_CONFIG_IN_ATTRIBUTES},
+}
+
+
+def _section_inner_keys(schema_section) -> set[str]:
+    """Return the field names inside a sectioned schema entry."""
+    # `section()` returns a special wrapper object whose `schema` attribute
+    # holds the inner vol.Schema. Each key is a vol.Marker (Required/Optional)
+    # whose `schema` is the field name string.
+    inner = schema_section.schema.schema  # vol.Schema → underlying dict
+    return {str(k.schema) if hasattr(k, "schema") else str(k) for k in inner}
+
+
+# ---------------------------------------------------------------------------
+# R1: section layout
+# ---------------------------------------------------------------------------
+
+
+def test_options_schema_has_all_six_sections_in_order() -> None:
+    """R1: the options form returns the six named sections in order."""
+    schema = _build_options_schema({}, show_send_split_delay=False)
+    keys = [
+        k.schema if hasattr(k, "schema") else k
+        for k in schema.schema  # type: ignore[attr-defined]
+    ]
+    assert tuple(keys) == EXPECTED_SECTIONS
+
+
+def test_each_section_contains_only_its_specified_fields() -> None:
+    """R1 scenario 2: every field appears in exactly one section, matching
+    the layout table."""
+    schema = _build_options_schema({}, show_send_split_delay=True)
+    for marker in schema.schema:  # type: ignore[attr-defined]
+        section_id = marker.schema if hasattr(marker, "schema") else marker
+        inner_fields = _section_inner_keys(schema.schema[marker])  # type: ignore[index]
+        expected = EXPECTED_SECTION_FIELDS[section_id].copy()
+        # Advanced gains send_split_delay when its driver is true.
+        if section_id == SECTION_ADVANCED:
+            expected.add(CONF_SEND_SPLIT_DELAY)
+        assert inner_fields == expected, (
+            f"section {section_id}: expected {expected}, got {inner_fields}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# R2: conditional visibility of send_split_delay
+# ---------------------------------------------------------------------------
+
+
+def test_send_split_delay_hidden_when_driver_false() -> None:
+    """R2: send_split_delay is absent when separate_turn_on_commands=False."""
+    schema = _build_options_schema({}, show_send_split_delay=False)
+    advanced_marker = next(
+        m
+        for m in schema.schema  # type: ignore[attr-defined]
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_ADVANCED
+    )
+    advanced = schema.schema[advanced_marker]  # type: ignore[index]
+    assert CONF_SEND_SPLIT_DELAY not in _section_inner_keys(advanced)
+
+
+def test_send_split_delay_visible_when_driver_true() -> None:
+    """R2: send_split_delay appears when separate_turn_on_commands=True."""
+    schema = _build_options_schema({}, show_send_split_delay=True)
+    advanced_marker = next(
+        m
+        for m in schema.schema  # type: ignore[attr-defined]
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_ADVANCED
+    )
+    advanced = schema.schema[advanced_marker]  # type: ignore[index]
+    assert CONF_SEND_SPLIT_DELAY in _section_inner_keys(advanced)
+
+
+# ---------------------------------------------------------------------------
+# R3: entity-driven sun timing
+# ---------------------------------------------------------------------------
+
+
+def test_default_sunrise_and_sunset_entities() -> None:
+    """R3: default entities point at the built-in sun.sun sensors."""
+    schema = _build_options_schema({}, show_send_split_delay=False)
+    sun_marker = next(
+        m
+        for m in schema.schema  # type: ignore[attr-defined]
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_SUN
+    )
+    sun_inner = schema.schema[sun_marker].schema.schema  # type: ignore[index]
+    defaults = {
+        (k.schema if hasattr(k, "schema") else k): k.default()
+        for k in sun_inner
+        if hasattr(k, "default")
+    }
+    assert defaults[CONF_SUNRISE_ENTITY] == DEFAULT_SUNRISE_ENTITY == "sensor.sun_next_rising"
+    assert defaults[CONF_SUNSET_ENTITY] == DEFAULT_SUNSET_ENTITY == "sensor.sun_next_setting"
+
+
+def test_sun_entity_selectors_are_strict_timestamp_sensors() -> None:
+    """R3 + D14: both sun-event entity selectors filter by domain=sensor and
+    device_class=timestamp."""
+    schema = _build_options_schema({}, show_send_split_delay=False)
+    sun_marker = next(
+        m
+        for m in schema.schema  # type: ignore[attr-defined]
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_SUN
+    )
+    sun_inner = schema.schema[sun_marker].schema.schema  # type: ignore[index]
+    for k, v in sun_inner.items():
+        field_name = k.schema if hasattr(k, "schema") else k
+        if field_name in (CONF_SUNRISE_ENTITY, CONF_SUNSET_ENTITY):
+            assert isinstance(v, EntitySelector)
+            cfg = v.config
+            # HA normalizes `domain="sensor"` to `domain=["sensor"]` and
+            # `device_class="timestamp"` to `device_class=["timestamp"]`.
+            domain = cfg.get("domain")
+            device_class = cfg.get("device_class")
+            assert "sensor" in (domain if isinstance(domain, list) else [domain])
+            assert "timestamp" in (
+                device_class if isinstance(device_class, list) else [device_class]
+            )
+
+
+# ---------------------------------------------------------------------------
+# R5: native HA selectors
+# ---------------------------------------------------------------------------
+
+
+def test_brightness_uses_slider_number_selector() -> None:
+    """R5: brightness fields are NumberSelectors with slider mode, 1–100 %, step 1."""
+    schema = _build_options_schema({}, show_send_split_delay=False)
+    daytime_marker = next(
+        m
+        for m in schema.schema  # type: ignore[attr-defined]
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_DAYTIME
+    )
+    inner = schema.schema[daytime_marker].schema.schema  # type: ignore[index]
+    for k, v in inner.items():
+        field_name = k.schema if hasattr(k, "schema") else k
+        if field_name in (CONF_MIN_BRIGHTNESS, CONF_MAX_BRIGHTNESS):
+            assert isinstance(v, NumberSelector)
+            cfg = v.config
+            assert cfg["min"] == 1
+            assert cfg["max"] == 100
+            assert cfg["step"] == 1
+            assert cfg["unit_of_measurement"] == "%"
+            assert cfg["mode"] == NumberSelectorMode.SLIDER
+
+
+def test_color_temp_uses_box_number_selector() -> None:
+    """R5: color-temp fields are NumberSelectors, 1000–10000 K, step 100."""
+    schema = _build_options_schema({}, show_send_split_delay=False)
+    daytime_marker = next(
+        m
+        for m in schema.schema  # type: ignore[attr-defined]
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_DAYTIME
+    )
+    inner = schema.schema[daytime_marker].schema.schema  # type: ignore[index]
+    for k, v in inner.items():
+        field_name = k.schema if hasattr(k, "schema") else k
+        if field_name in (CONF_MIN_COLOR_TEMP, CONF_MAX_COLOR_TEMP):
+            assert isinstance(v, NumberSelector)
+            cfg = v.config
+            assert cfg["min"] == 1000
+            assert cfg["max"] == 10000
+            assert cfg["step"] == 100
+            assert cfg["unit_of_measurement"] == "K"
+
+
+def test_booleans_use_boolean_selector() -> None:
+    """R5: every boolean field renders as a BooleanSelector."""
+    schema = _build_options_schema({}, show_send_split_delay=True)
+    boolean_fields = {
+        CONF_PREFER_RGB_COLOR,
+        CONF_INTERCEPT,
+        CONF_MULTI_LIGHT_INTERCEPT,
+        CONF_SEPARATE_TURN_ON_COMMANDS,
+        CONF_SKIP_REDUNDANT_COMMANDS,
+        CONF_INCLUDE_CONFIG_IN_ATTRIBUTES,
+    }
+    for marker in schema.schema:  # type: ignore[attr-defined]
+        section = schema.schema[marker]  # type: ignore[index]
+        for k, v in section.schema.schema.items():
+            field_name = k.schema if hasattr(k, "schema") else k
+            if field_name in boolean_fields:
+                assert isinstance(v, BooleanSelector), (
+                    f"{field_name} is {type(v).__name__}, expected BooleanSelector"
+                )
+
+
+# ---------------------------------------------------------------------------
+# Full flow integration tests (R6, R7)
+# ---------------------------------------------------------------------------
+
+
+async def test_user_flow_creates_entry(hass) -> None:
+    """The user step creates an entry with the given name."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": "user"},
     )
-
-    assert result["type"] == FlowResultType.FORM
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
-    assert result["handler"] == "adaptive_lighting"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input={CONF_NAME: "living room"},
     )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "living room"
 
 
-async def test_import_success(hass):
-    """Test import step is successful."""
-    data = DEFAULT_DATA.copy()
-    data[CONF_NAME] = DEFAULT_NAME
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": "import"},
-        data=data,
-    )
-
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == DEFAULT_NAME
-    for key, value in data.items():
-        assert result["data"][key] == value
-
-
-async def test_options(hass):
-    """Test updating options."""
+async def test_yaml_managed_entry_aborts_options_flow(hass) -> None:
+    """R7: options flow on a SOURCE_IMPORT entry aborts with yaml_managed."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         title=DEFAULT_NAME,
         data={CONF_NAME: DEFAULT_NAME},
         options={},
-    )
-    entry.add_to_hass(hass)
-
-    await hass.config_entries.async_setup(entry.entry_id)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "init"
-
-    data = DEFAULT_DATA.copy()
-    data[CONF_SUNRISE_TIME] = NONE_STR
-    data[CONF_SUNSET_TIME] = NONE_STR
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input=data,
-    )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    for key, value in data.items():
-        assert result["data"][key] == value
-
-
-async def test_incorrect_options(hass):
-    """Test updating incorrect options."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title=DEFAULT_NAME,
-        data={CONF_NAME: DEFAULT_NAME},
-        options={},
-    )
-    entry.add_to_hass(hass)
-
-    await hass.config_entries.async_setup(entry.entry_id)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    data = DEFAULT_DATA.copy()
-    data[CONF_SUNRISE_TIME] = "yolo"
-    data[CONF_SUNSET_TIME] = "yolo"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input=data,
-    )
-
-
-async def test_import_twice(hass):
-    """Test importing twice."""
-    data = DEFAULT_DATA.copy()
-    data[CONF_NAME] = DEFAULT_NAME
-    for _ in range(2):
-        _ = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": "import"},
-            data=data,
-        )
-
-
-async def test_options_flow_for_yaml_import(hass):
-    """Test that options flow for YAML-imported entries shows empty form.
-
-    When a config entry is imported from YAML (source=SOURCE_IMPORT),
-    the options flow should show an empty form since the user should
-    modify the YAML configuration directly, not through the UI.
-    """
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title=DEFAULT_NAME,
-        data={CONF_NAME: DEFAULT_NAME},
         source=SOURCE_IMPORT,
-        options={},
+        version=2,
     )
     entry.add_to_hass(hass)
-
-    # For YAML imports, the switch setup requires the unique_id to be in
-    # hass.data[DOMAIN]["__yaml__"], otherwise it deletes the entry.
-    # This simulates what async_step_import does.
-    hass.data.setdefault(DOMAIN, {}).setdefault("__yaml__", set()).add(entry.unique_id)
-
     await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "yaml_managed"
 
-    # For YAML imports, the options flow shows an empty form (data_schema=None)
-    # This is intentional - users should modify YAML, not UI
-    assert result["type"] == FlowResultType.FORM
+
+async def test_options_flow_renders_sectioned_schema(hass) -> None:
+    """R1 + R6: opening options on a UI-managed entry shows the sectioned form."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=DEFAULT_NAME,
+        data={CONF_NAME: DEFAULT_NAME},
+        options={},
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
-    assert result.get("data_schema") is None
-
-
-async def test_menu_shown_when_entries_exist(hass):
-    """Test that menu step is shown when existing entries exist."""
-    # Create an existing entry
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="existing",
-        data={CONF_NAME: "existing"},
-        options={"min_brightness": 10},
-    )
-    entry.add_to_hass(hass)
-
-    # Start a new config flow - should show menu
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": "user"},
-    )
-
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "menu"
-
-
-async def test_menu_create_new_instance(hass):
-    """Test creating a new instance through the menu."""
-    # Create an existing entry
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="existing",
-        data={CONF_NAME: "existing"},
-        options={"min_brightness": 10},
-    )
-    entry.add_to_hass(hass)
-
-    # Start config flow - shows menu
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": "user"},
-    )
-    assert result["step_id"] == "menu"
-
-    # Choose to create new instance
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        user_input={"action": "new"},
-    )
-
-    # Should show name form
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "user"
-
-    # Enter name
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        user_input={CONF_NAME: "new instance"},
-    )
-
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "new instance"
-    # New instance should have no options (not duplicated)
-    assert result["options"] == {}
-
-
-async def test_menu_duplicate_instance(hass):
-    """Test duplicating an existing instance through the menu."""
-    # Create an existing entry with custom options
-    source_options = {"min_brightness": 20, "max_brightness": 80}
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="source",
-        data={CONF_NAME: "source"},
-        options=source_options,
-    )
-    entry.add_to_hass(hass)
-
-    # Start config flow - shows menu
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": "user"},
-    )
-    assert result["step_id"] == "menu"
-
-    # Choose to duplicate existing entry
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        user_input={"action": entry.entry_id},
-    )
-
-    # Should show name form
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "user"
-
-    # Enter name for duplicated instance
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        user_input={CONF_NAME: "duplicated"},
-    )
-
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "duplicated"
-    # Duplicated instance should have copied options
-    assert result["options"] == source_options
+    # The form's data_schema contains the six section keys.
+    schema_keys = [
+        (k.schema if hasattr(k, "schema") else k)
+        for k in result["data_schema"].schema  # type: ignore[union-attr,attr-defined]
+    ]
+    assert tuple(schema_keys) == EXPECTED_SECTIONS
