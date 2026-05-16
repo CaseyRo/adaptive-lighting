@@ -138,3 +138,4 @@ config/*
 
 # Home Assistant core
 core/
+.ha_snapshot_pre_cdit.json
