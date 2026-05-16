@@ -4,6 +4,72 @@
 [![All Contributors](https://img.shields.io/badge/all_contributors-134-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
+---
+
+> # ⚠️ This is the CDiT fork
+>
+> This repository is the [CDiT](https://github.com/CaseyRo)-opinionated fork of
+> [`basnijholt/adaptive-lighting`](https://github.com/basnijholt/adaptive-lighting).
+> It is **not a drop-in replacement** for the upstream HACS integration.
+>
+> ## 🙏 Huge thanks to the upstream team
+>
+> **None of this exists without [@basnijholt](https://github.com/basnijholt)
+> and the 130+ contributors** to the original Adaptive Lighting project. The
+> curve math, the `light.turn_on` interception, the HACS plumbing, the
+> Pyodide simulator, the long tail of bug fixes from running this on
+> thousands of real homes — that's *their* work. This fork is a thin opinion
+> on top of a deep, mature codebase. If you're looking for the canonical,
+> well-maintained, multi-feature integration that supports *everyone's* use
+> case, **use upstream.** This fork only exists because CDiT's house has a
+> narrower setup and the upstream config dialog was hard to tune at speed
+> for one household.
+>
+> **Please star the upstream repo:**
+> [github.com/basnijholt/adaptive-lighting](https://github.com/basnijholt/adaptive-lighting).
+> If you find a bug in core curve math, light intercept, or any feature
+> CDiT didn't change, report it there — that's where it'll actually get
+> fixed and helps everyone, not just one CDiT household.
+>
+> **Differences from upstream:**
+>
+> 1. **Sectioned config dialog** — six collapsible groups (Targets, Daytime curve,
+>    Sun schedule, Light control, Advanced, Diagnostics) replace upstream's
+>    flat 40-field form. Native HA selectors throughout; reload-on-save via
+>    `OptionsFlowWithReload`.
+> 2. **Entity-driven sun timing** — point `sunrise_entity` / `sunset_entity`
+>    at any sensor with `device_class: timestamp`. Defaults to the built-in
+>    `sensor.sun_next_rising` / `sensor.sun_next_setting`. Sun2 sensors
+>    (`sensor.sun2_dawn`, `sensor.sun2_astro_dawn`, etc.) work without code
+>    changes — see "Recommended companions" below.
+> 3. **Synthetic tanh curve** — brightness and color temperature follow a
+>    smooth tanh ramp anchored at the two sun events with a fixed 30-minute
+>    half-width. No `brightness_mode` selector to fiddle with.
+> 4. **Fewer features, on purpose** — sleep mode, take-over-control, manual
+>    sun-time overrides, `only_once`, and `adapt_only_on_bare_turn_on` are
+>    **removed**. Manual overrides are expected to live at the
+>    scene/automation layer instead. The integration creates **three switches
+>    per profile**, not four (no sleep-mode switch).
+> 5. **Strict version break** — existing upstream config entries WILL NOT load.
+>    The integration rejects them with a clear "delete and recreate" message
+>    instead of silently migrating. Bump major version, recreate your one
+>    config entry, move on.
+>
+> **Recommended companions:**
+>
+> - [**Sun2**](https://github.com/pnbruckner/ha-sun2) (HACS) provides civil,
+>   nautical, and astronomical twilight sensors. Point `sunrise_entity` at
+>   `sensor.sun2_astro_dawn` for the smoothest fade from deep night to dawn,
+>   or `sensor.sun2_dawn` for civil twilight. Optional but recommended.
+>
+> **Minimum Home Assistant version: `2025.1.0`** (pinned in `manifest.json`).
+>
+> The rest of this README is from upstream and may describe features that no
+> longer exist in this fork. See `CHANGELOG.md` for the canonical list of
+> CDiT-specific changes.
+
+---
+
 # 🌞 Adaptive Lighting: Enhance Your Home's Atmosphere with Smart, Sun-Synchronized Lighting 🌙
 
 <img src="https://raw.githubusercontent.com/home-assistant/brands/master/custom_integrations/adaptive_lighting/icon@2x.png" alt="logo" width="256px" height="256px" />

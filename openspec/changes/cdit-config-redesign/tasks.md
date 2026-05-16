@@ -75,16 +75,16 @@ Group 7-9 are tests, translations, and docs (final polish).
 
 ## 8. Strings and translations
 
-- [ ] 8.1 In `strings.json`, add section labels (`section.targets.name`, `section.daytime_curve.name`, etc.) and short descriptions per section. Add field labels for `sunrise_entity` / `sunset_entity`. [R1, R3]
-- [ ] 8.2 In `strings.json`, add the `yaml_managed` abort reason text: "This Adaptive Lighting config entry is managed from `configuration.yaml`. Edit it there to change options." [R7]
-- [ ] 8.3 In `strings.json`, add the version-incompatible error: "This entry was created with an older, incompatible version. Delete it and create a new one." [R8]
-- [ ] 8.4 Remove `strings.json` keys for the 21 deleted fields and the sleep switch entity. [R1, D7]
-- [ ] 8.5 Mirror the additions/removals in `translations/en.json`. Other locales (de, fr, etc.) are out of scope and may diverge until a follow-up change. [R1]
-- [ ] 8.6 Plain-language pass on every field label and description in `strings.json`. Each label reads like a sentence a human wrote — not engineer shorthand. Add a one-sentence "what this section is for" framer at the top of each section. Examples: "Adapt Brightness" → "Adjust brightness through the day"; "Initial transition" → "Fade time when a light first turns on (seconds)"; "Send split delay" → "Pause between commands (ms)". Abort messages and error messages get the same treatment. [R1, R7, R8, polish]
+- [x] 8.1 In `strings.json`, add section labels (`section.targets.name`, `section.daytime_curve.name`, etc.) and short descriptions per section. Add field labels for `sunrise_entity` / `sunset_entity`. [R1, R3]
+- [x] 8.2 In `strings.json`, add the `yaml_managed` abort reason text: "This Adaptive Lighting config entry is managed from `configuration.yaml`. Edit it there to change options." [R7]
+- [x] 8.3 In `strings.json`, add the version-incompatible error: "This entry was created with an older, incompatible version. Delete it and create a new one." [R8]
+- [x] 8.4 Remove `strings.json` keys for the 21 deleted fields and the sleep switch entity. [R1, D7]
+- [x] 8.5 Mirror the additions/removals in `translations/en.json`. Other locales (de, fr, etc.) are out of scope and may diverge until a follow-up change. [R1]
+- [x] 8.6 Plain-language pass on every field label and description in `strings.json`. Each label reads like a sentence a human wrote — not engineer shorthand. Add a one-sentence "what this section is for" framer at the top of each section. [R1, R7, R8, polish]
 
 ## 9. Docs — README and CHANGELOG
 
-- [ ] 9.1 Replace the upstream README's "Installation" / "Configuration" sections (or add a CDiT-specific preamble at the top) explicitly stating: "This is a CDiT fork. Existing upstream config entries WILL NOT load; recreate them after upgrade." Reference the migration steps from design.md §Migration Plan. [D4]
-- [ ] 9.2 Add a "Recommended companions" section to README mentioning Sun2 as a HACS-installable source for precise civil / nautical / astronomical twilight sensors. Show the example of pointing `sunrise_entity` at `sensor.sun2_astro_dawn`. [D2, D14]
-- [ ] 9.3 Write `CHANGELOG.md` (or append to existing) entry for `2.0.0-cdit.1`: the 21 removed fields by name, the 2 added fields, the 1 removed entity, the breaking config-entry behavior, and the explicit recreate workflow. [D4]
-- [ ] 9.4 Update the fork's GitHub repo description and topics to mark it as opinionated/fork (not a drop-in replacement). [D4]
+- [x] 9.1 Replace the upstream README's "Installation" / "Configuration" sections (or add a CDiT-specific preamble at the top) explicitly stating: "This is a CDiT fork. Existing upstream config entries WILL NOT load; recreate them after upgrade." Reference the migration steps from design.md §Migration Plan. [D4]
+- [x] 9.2 Add a "Recommended companions" section to README mentioning Sun2 as a HACS-installable source for precise civil / nautical / astronomical twilight sensors. Show the example of pointing `sunrise_entity` at `sensor.sun2_astro_dawn`. [D2, D14]
+- [x] 9.3 Write `CHANGELOG.md` (or append to existing) entry for `2.0.0-cdit.1`: the 21 removed fields by name, the 2 added fields, the 1 removed entity, the breaking config-entry behavior, and the explicit recreate workflow. [D4]
+- [ ] 9.4 Update the fork's GitHub repo description and topics to mark it as opinionated/fork (not a drop-in replacement). [D4]  _(GitHub-side metadata; do via `gh repo edit` in a separate step after merge.)_
