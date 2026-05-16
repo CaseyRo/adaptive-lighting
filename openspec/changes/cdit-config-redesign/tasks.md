@@ -1,7 +1,8 @@
 <!--
 Annotations:
-  R1–R9  = Requirements in specs/options-flow/spec.md
-  D1–D15 = Decisions in design.md
+  R1–R9   = Requirements in specs/options-flow/spec.md
+  D1–D15  = Decisions in design.md
+  polish  = Quality/UX tasks captured during design review, not spec-driven
 
 Build order: groups 1 and 2 are foundation (run sequentially or in parallel,
 no shared file). Groups 3-5 layer on top. Group 6 is the setup-entry guard.
@@ -15,6 +16,7 @@ Group 7-9 are tests, translations, and docs (final polish).
 - [ ] 1.3 Add `CONF_SUNRISE_ENTITY = "sunrise_entity"` / `DEFAULT_SUNRISE_ENTITY = "sensor.sun_next_rising"` and the `_SUNSET_` pair. [R3]
 - [ ] 1.4 Add `RAMP_HALF_WIDTH_SECONDS = 1800` with an inline comment naming the design choice (30-min eye-friendly transition). [R4, D15]
 - [ ] 1.5 Bump `manifest.json` to `version: "2.0.0-cdit.1"`, add `"homeassistant": "2025.1.0"`, update `codeowners` to CDiT-dev maintainers, point `documentation` / `issue_tracker` at the fork URL. [R8, D4, D13]
+- [ ] 1.6 Re-default values that felt off in upstream: `DEFAULT_MIN_BRIGHTNESS = 5` (was 1 — 1% reads as off on most bulbs), `DEFAULT_MIN_COLOR_TEMP = 2200` (was 2000 — less sodium-vapor orange). Document the change in a one-line comment per constant. [polish]
 
 ## 2. Foundation — strip dead code from `switch.py`
 
@@ -22,6 +24,7 @@ Group 7-9 are tests, translations, and docs (final polish).
 - [ ] 2.2 Remove sleep-mode state machine from the master `AdaptiveSwitch` class (sleep transition logic, sleep brightness override, `adapt_until_sleep` handling). [D7]
 - [ ] 2.3 Remove the take-over-control state machine: `_manual_control` tracking, `_autoreset_handle`, `detect_non_ha_changes` polling, `only_once` short-circuits, `adapt_only_on_bare_turn_on` checks. [D8]
 - [ ] 2.4 Audit remaining `switch.py` for references to removed `CONF_*` keys and delete dead branches. Lint must pass. [D7, D8]
+- [ ] 2.5 Set distinct `_attr_icon` on each of the three switch classes: master `mdi:weather-sunny-alert` (signals automatic behavior), `adapt_color` `mdi:invert-colors`, `adapt_brightness` `mdi:brightness-percent`. [polish]
 
 ## 3. Config flow — sectioned schema
 
@@ -77,6 +80,7 @@ Group 7-9 are tests, translations, and docs (final polish).
 - [ ] 8.3 In `strings.json`, add the version-incompatible error: "This entry was created with an older, incompatible version. Delete it and create a new one." [R8]
 - [ ] 8.4 Remove `strings.json` keys for the 21 deleted fields and the sleep switch entity. [R1, D7]
 - [ ] 8.5 Mirror the additions/removals in `translations/en.json`. Other locales (de, fr, etc.) are out of scope and may diverge until a follow-up change. [R1]
+- [ ] 8.6 Plain-language pass on every field label and description in `strings.json`. Each label reads like a sentence a human wrote — not engineer shorthand. Add a one-sentence "what this section is for" framer at the top of each section. Examples: "Adapt Brightness" → "Adjust brightness through the day"; "Initial transition" → "Fade time when a light first turns on (seconds)"; "Send split delay" → "Pause between commands (ms)". Abort messages and error messages get the same treatment. [R1, R7, R8, polish]
 
 ## 9. Docs — README and CHANGELOG
 
