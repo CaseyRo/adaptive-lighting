@@ -7,20 +7,17 @@ from __future__ import annotations
 
 import logging
 
-import pytest
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import CONF_NAME
+from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.adaptive_lighting.const import (
     CONFIG_ENTRY_VERSION,
     DEFAULT_NAME,
     DOMAIN,
     UNDO_UPDATE_LISTENER,
 )
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_NAME
-from homeassistant.exceptions import ConfigEntryError
-from homeassistant.helpers import entity_registry as er
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 
 # ---------------------------------------------------------------------------
 # R8 — strict version break

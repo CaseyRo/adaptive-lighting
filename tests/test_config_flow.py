@@ -5,10 +5,17 @@ Covers spec/options-flow/spec.md requirements R1, R2, R3, R5, R6, R7.
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import patch
+from homeassistant.config_entries import SOURCE_IMPORT
+from homeassistant.const import CONF_NAME
+from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    EntitySelector,
+    NumberSelector,
+    NumberSelectorMode,
+)
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-import pytest
 from custom_components.adaptive_lighting.config_flow import (
     SECTION_ADVANCED,
     SECTION_DAYTIME,
@@ -39,18 +46,6 @@ from custom_components.adaptive_lighting.const import (
     DEFAULT_SUNSET_ENTITY,
     DOMAIN,
 )
-from homeassistant.config_entries import SOURCE_IMPORT
-from homeassistant.const import CONF_NAME
-from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers.selector import (
-    BooleanSelector,
-    EntitySelector,
-    NumberSelector,
-    NumberSelectorMode,
-)
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 
 EXPECTED_SECTIONS = (
     SECTION_TARGETS,

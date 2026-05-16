@@ -11,11 +11,11 @@ import datetime as dt
 from datetime import UTC, timedelta
 
 import pytest
+
 from custom_components.adaptive_lighting.color_and_brightness import (
     SunLightSettings,
     _tanh_day_curve,
 )
-
 
 HALF_WIDTH = 1800  # seconds — matches RAMP_HALF_WIDTH_SECONDS
 
