@@ -38,7 +38,7 @@ Group 7-9 are tests, translations, and docs (final polish).
 
 - [x] 4.1 Change `OptionsFlow` → `OptionsFlowWithReload` in `config_flow.py`. Drop any custom `async_reload` / `async_unload_entry` plumbing that exists today for reload purposes. [R6, D6]
 - [x] 4.2 In the options flow's `async_step_init`, detect `config_entry.source == SOURCE_IMPORT` and return `self.async_abort(reason="yaml_managed")`. [R7]
-- [ ] 4.3 Confirm via manual test that toggling a field and saving reloads the integration with no "restart HA" prompt, and that entity IDs of the AL switches are preserved across the reload. [R6]
+- [x] 4.3 Confirm via manual test that toggling a field and saving reloads the integration with no "restart HA" prompt, and that entity IDs of the AL switches are preserved across the reload. [R6]  _(Verified on live HA 2026.3.4: created `cdit_test_*` entry, opened options flow (6 sections rendered per R1), toggled include_config_in_attributes off→on, saved (type=create_entry, no errors), entry remained in `loaded` state — clean reload — and all 3 entity IDs were preserved. Also caught a real bug during the test: removed `add_update_listener` from `__init__.py` since it conflicts with `OptionsFlowWithReload`.)_
 
 ## 5. Curve math — entity reads + synthetic tanh
 
