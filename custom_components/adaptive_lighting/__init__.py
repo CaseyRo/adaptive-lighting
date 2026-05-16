@@ -17,7 +17,6 @@ from .const import (
     CONF_NAME,
     CONFIG_ENTRY_VERSION,
     DOMAIN,
-    UNDO_UPDATE_LISTENER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,7 +115,12 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Set up the component."""
+    """Set up the component.
+
+    Note: `OptionsFlowWithReload` (in config_flow.py) handles reload-on-save
+    automatically — HA rejects `config_entry.add_update_listener` when used
+    with `OptionsFlowWithReload`, so we deliberately do NOT register one.
+    """
     _remove_orphan_sleep_entities(hass, config_entry)
 
     data = hass.data.setdefault(DOMAIN, {})
@@ -125,16 +129,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # and explicit `hass.reload_config_entry` calls).
     hass.bus.async_listen("hass.config.entry_updated", reload_configuration_yaml)
 
-    undo_listener = config_entry.add_update_listener(async_update_options)
-    data[config_entry.entry_id] = {UNDO_UPDATE_LISTENER: undo_listener}
+    data[config_entry.entry_id] = {}
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     return True
-
-
-async def async_update_options(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Update options."""
-    await hass.config_entries.async_reload(config_entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -144,9 +142,8 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         "switch",
     )
     data = hass.data[DOMAIN]
-    data[config_entry.entry_id][UNDO_UPDATE_LISTENER]()
     if unload_ok:
-        data.pop(config_entry.entry_id)
+        data.pop(config_entry.entry_id, None)
 
     if len(data) == 1 and ATTR_ADAPTIVE_LIGHTING_MANAGER in data:
         # no more config_entries

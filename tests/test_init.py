@@ -16,7 +16,6 @@ from custom_components.adaptive_lighting.const import (
     CONFIG_ENTRY_VERSION,
     DEFAULT_NAME,
     DOMAIN,
-    UNDO_UPDATE_LISTENER,
 )
 
 # ---------------------------------------------------------------------------
@@ -35,7 +34,9 @@ async def test_successful_setup_on_current_version(hass) -> None:
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state == ConfigEntryState.LOADED
-    assert UNDO_UPDATE_LISTENER in hass.data[DOMAIN][entry.entry_id]
+    # OptionsFlowWithReload handles reload internally — we don't register
+    # an update listener (HA rejects the combination).
+    assert entry.entry_id in hass.data[DOMAIN]
 
 
 async def test_stale_version_raises_config_entry_error(hass, caplog) -> None:
