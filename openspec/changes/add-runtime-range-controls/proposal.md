@@ -20,11 +20,13 @@ This change promotes the four ranges to first-class runtime entities (HA's `numb
 - **Curve math reads from number entities**, not from `entry.options` directly. Single read path at evaluation time.
 - **Options flow keeps the four fields visible** in the Daytime curve section so users can still tune them from the config screen (especially first-time setup). Both surfaces stay in sync.
 
+- **Entity-naming hygiene** (folded in because the new entities would inherit the same problem otherwise): switch the existing three switch entities and the four new number entities to HA's `has_entity_name = True` convention. Device name becomes the profile name (e.g., "Dining MVP"); entity names become short ("Brightness", "Color", "Min color temp"). Today's friendly names like "Adaptive Lighting Adapt Brightness dining_mvp_lights" truncate to "Adaptive Lighting Adapt Br…" in HA's More-info card; after this change they read as "Dining MVP Brightness" (21 chars, well inside the truncation window). `unique_id`s stay stable, so existing entity_ids and automations keep working.
+
 ## Capabilities
 
 ### New Capabilities
 
-- `runtime-range-controls`: live-tunable brightness and color-temperature range entities, with bidirectional sync to the config entry options. Covers entity creation, write-through semantics, curve-math read path, and conflict resolution between the two surfaces.
+- `runtime-range-controls`: live-tunable brightness and color-temperature range entities, with bidirectional sync to the config entry options. Covers entity creation, write-through semantics, curve-math read path, and conflict resolution between the two surfaces. Also defines the `has_entity_name` naming convention applied to all AL entities (switches + number entities).
 
 ### Modified Capabilities
 

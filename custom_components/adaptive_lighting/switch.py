@@ -329,7 +329,7 @@ async def handle_change_switch_settings(
         )
 
 
-async def async_setup_entry(  # noqa: PLR0915
+async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
@@ -356,6 +356,7 @@ async def async_setup_entry(  # noqa: PLR0915
         hass=hass,
         config_entry=config_entry,
         icon=ICON_COLOR_TEMP,
+        display_name="Color",
     )
     adapt_brightness_switch = SimpleSwitch(
         which="Adapt Brightness",
@@ -363,6 +364,7 @@ async def async_setup_entry(  # noqa: PLR0915
         hass=hass,
         config_entry=config_entry,
         icon=ICON_BRIGHTNESS,
+        display_name="Brightness",
     )
     switch = AdaptiveSwitch(
         hass,
@@ -733,6 +735,12 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
     _only_once: bool = False
     _auto_reset_manual_control_time: float = 0
 
+    # Entity-name composition: device name carries the profile name; the
+    # master switch's friendly name is just the device name. See design
+    # decision D11 of add-runtime-range-controls.
+    _attr_has_entity_name = True
+    _attr_name = None
+
     _attr_icon = "mdi:weather-sunny-alert"
 
     def __init__(
@@ -750,6 +758,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         self.manager = manager
         self.adapt_color_switch = adapt_color_switch
         self.adapt_brightness_switch = adapt_brightness_switch
+        self._config_entry = config_entry
 
         data = validate(config_entry)
 
@@ -832,14 +841,14 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         self._sunset_entity = data[CONF_SUNSET_ENTITY]
         self._expand_light_groups()
 
-        self._sun_light_settings = SunLightSettings(
-            name=self._name,
-            max_brightness=data[CONF_MAX_BRIGHTNESS],
-            max_color_temp=data[CONF_MAX_COLOR_TEMP],
-            min_brightness=data[CONF_MIN_BRIGHTNESS],
-            min_color_temp=data[CONF_MIN_COLOR_TEMP],
-            ramp_half_width_seconds=RAMP_HALF_WIDTH_SECONDS,
-        )
+        # Snapshot the four range values for the fallback path; the
+        # `sun_light_settings` property rebuilds the dataclass on each tick
+        # using live values from the number entities, falling back to these
+        # snapshots when an entity is unavailable.
+        self._fallback_min_brightness = data[CONF_MIN_BRIGHTNESS]
+        self._fallback_max_brightness = data[CONF_MAX_BRIGHTNESS]
+        self._fallback_min_color_temp = data[CONF_MIN_COLOR_TEMP]
+        self._fallback_max_color_temp = data[CONF_MAX_COLOR_TEMP]
         _LOGGER.debug(
             "%s: Set switch settings for lights '%s'. now using data: '%s'",
             self._name,
@@ -894,10 +903,59 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             t_sunset = t_sunset + timedelta(days=1)
         return t_sunrise, t_sunset
 
+    def _get_runtime_range(self, field_key: str) -> int:
+        """Read the live curve bound from its number entity.
+
+        Looks up the entity by stable unique_id via the entity registry,
+        reads the state-machine value, and falls back to the snapshot
+        captured at setup when the entity is unavailable (spec R3, D8, D9).
+        """
+        registry = entity_registry.async_get(self.hass)
+        unique_id = f"{self._config_entry.entry_id}_{field_key}"
+        entity_id = registry.async_get_entity_id("number", DOMAIN, unique_id)
+        if entity_id is not None:
+            state = self.hass.states.get(entity_id)
+            if state is not None and state.state not in (
+                None,
+                "unavailable",
+                "unknown",
+            ):
+                try:
+                    return int(float(state.state))
+                except (TypeError, ValueError):
+                    pass
+        fallback = {
+            "min_brightness": self._fallback_min_brightness,
+            "max_brightness": self._fallback_max_brightness,
+            "min_color_temp": self._fallback_min_color_temp,
+            "max_color_temp": self._fallback_max_color_temp,
+        }[field_key]
+        _LOGGER.debug(
+            "%s: runtime range entity unavailable for '%s' "
+            "(unique_id=%s) — falling back to entry.options value %s",
+            self._name,
+            field_key,
+            unique_id,
+            fallback,
+        )
+        return int(fallback)
+
     @property
-    def name(self) -> str:
-        """Return the name of the device if any."""
-        return f"Adaptive Lighting: {self._name}"
+    def sun_light_settings(self) -> SunLightSettings:
+        """Return a fresh `SunLightSettings` built from current entity states.
+
+        Reads the four runtime range values on every property access so curve
+        evaluations always see the latest slider position. The dataclass init
+        cost is microseconds — cheap enough to do every tick (D8).
+        """
+        return SunLightSettings(
+            name=self._name,
+            max_brightness=self._get_runtime_range("max_brightness"),
+            max_color_temp=self._get_runtime_range("max_color_temp"),
+            min_brightness=self._get_runtime_range("min_brightness"),
+            min_color_temp=self._get_runtime_range("min_color_temp"),
+            ramp_half_width_seconds=RAMP_HALF_WIDTH_SECONDS,
+        )
 
     @property
     def unique_id(self) -> str:
@@ -1120,7 +1178,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         if events is None:
             return None
         t_sunrise, t_sunset = events
-        self._settings = self._sun_light_settings.get_settings(
+        self._settings = self.sun_light_settings.get_settings(
             transition,
             t_sunrise,
             t_sunset,
@@ -1316,7 +1374,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         if events is not None:
             t_sunrise, t_sunset = events
             self._settings.update(
-                self._sun_light_settings.get_settings(
+                self.sun_light_settings.get_settings(
                     transition,
                     t_sunrise,
                     t_sunset,
@@ -1417,7 +1475,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             force=True,
         )
 
-    def fire_manual_control_event(  # noqa: ARG002
+    def fire_manual_control_event(
         self,
         light: str,
         context: Context,
@@ -1439,6 +1497,11 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
 class SimpleSwitch(SwitchEntity, RestoreEntity):
     """Representation of a Adaptive Lighting switch."""
 
+    # Entity-name composition: device name carries the profile name, this
+    # switch's `_attr_name` carries only its role ("Brightness" / "Color").
+    # HA composes "<device> <role>" automatically. D11.
+    _attr_has_entity_name = True
+
     def __init__(
         self,
         which: str,
@@ -1446,8 +1509,14 @@ class SimpleSwitch(SwitchEntity, RestoreEntity):
         hass: HomeAssistant,
         config_entry: ConfigEntry,
         icon: str,
+        display_name: str | None = None,
     ) -> None:
-        """Initialize the Adaptive Lighting switch."""
+        """Initialize the Adaptive Lighting switch.
+
+        `which` is the legacy slug token used for the entity's unique_id
+        (kept stable to preserve existing entity_ids). `display_name`
+        overrides the user-facing role label; falls back to `which`.
+        """
         self.hass = hass
         data = validate(config_entry)
         self._icon = icon
@@ -1455,13 +1524,10 @@ class SimpleSwitch(SwitchEntity, RestoreEntity):
         self._which = which
         self._config_name = data[CONF_NAME]
         self._unique_id = f"{self._config_name}_{slugify(self._which)}"
+        # Internal label for log messages (keep includes profile + role).
         self._name = f"Adaptive Lighting {which}: {self._config_name}"
+        self._attr_name = display_name or which
         self._initial_state = initial_state
-
-    @property
-    def name(self) -> str:
-        """Return the name of the device if any."""
-        return self._name
 
     @property
     def unique_id(self) -> str:
@@ -1485,7 +1551,7 @@ class SimpleSwitch(SwitchEntity, RestoreEntity):
             identifiers={
                 (DOMAIN, self._config_name),
             },
-            name=f"Adaptive Lighting: {self._config_name}",
+            name=self._config_name,
             entry_type=DeviceEntryType.SERVICE,
         )
 

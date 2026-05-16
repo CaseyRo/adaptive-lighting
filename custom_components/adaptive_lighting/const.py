@@ -46,9 +46,7 @@ DOCS[CONF_INCLUDE_CONFIG_IN_ATTRIBUTES] = (
 )
 
 CONF_INITIAL_TRANSITION, DEFAULT_INITIAL_TRANSITION = "initial_transition", 1
-DOCS[CONF_INITIAL_TRANSITION] = (
-    "Fade time when a light first turns on, in seconds."
-)
+DOCS[CONF_INITIAL_TRANSITION] = "Fade time when a light first turns on, in seconds."
 
 CONF_INTERVAL, DEFAULT_INTERVAL = "interval", 90
 DOCS[CONF_INTERVAL] = "How often to recompute and re-apply the curve, in seconds."
@@ -150,6 +148,54 @@ ADAPT_BRIGHTNESS_SWITCH = "adapt_brightness_switch"
 ATTR_ADAPTIVE_LIGHTING_MANAGER = "manager"
 UNDO_UPDATE_LISTENER = "undo_update_listener"
 
+# Runtime range number-entity declarations. Each tuple drives both the
+# number platform's entity creation and the curve-math read path. The
+# `field_key` becomes the entity's unique-id suffix; the `conf_key` ties
+# the entity back to its initial-seed value in `entry.options`.
+# Design decisions 5, 6, 11 — see add-runtime-range-controls/design.md.
+RANGE_ENTITIES: list[dict[str, Any]] = [
+    {
+        "field_key": "min_brightness",
+        "conf_key": CONF_MIN_BRIGHTNESS,
+        "name": "Min brightness",
+        "native_min": 1,
+        "native_max": 100,
+        "step": 1,
+        "unit": "%",
+        "icon": "mdi:brightness-3",
+    },
+    {
+        "field_key": "max_brightness",
+        "conf_key": CONF_MAX_BRIGHTNESS,
+        "name": "Max brightness",
+        "native_min": 1,
+        "native_max": 100,
+        "step": 1,
+        "unit": "%",
+        "icon": "mdi:brightness-7",
+    },
+    {
+        "field_key": "min_color_temp",
+        "conf_key": CONF_MIN_COLOR_TEMP,
+        "name": "Min color temp",
+        "native_min": 1000,
+        "native_max": 10000,
+        "step": 100,
+        "unit": "K",
+        "icon": "mdi:thermometer-low",
+    },
+    {
+        "field_key": "max_color_temp",
+        "conf_key": CONF_MAX_COLOR_TEMP,
+        "name": "Max color temp",
+        "native_min": 1000,
+        "native_max": 10000,
+        "step": 100,
+        "unit": "K",
+        "icon": "mdi:thermometer-high",
+    },
+]
+
 ATTR_ADAPT_COLOR = "adapt_color"
 DOCS[ATTR_ADAPT_COLOR] = "Adjust the color of supporting lights over the day."
 ATTR_ADAPT_BRIGHTNESS = "adapt_brightness"
@@ -161,7 +207,7 @@ DOCS[CONF_TURN_ON_LIGHTS] = "Also turn on any targeted lights that are currently
 SERVICE_CHANGE_SWITCH_SETTINGS = "change_switch_settings"
 CONF_USE_DEFAULTS = "use_defaults"
 DOCS[CONF_USE_DEFAULTS] = (
-    'Source for any field not supplied in this call: '
+    "Source for any field not supplied in this call: "
     '"current" (keep existing values), "factory" (documented defaults), '
     'or "configuration" (the profile\'s own configured defaults).'
 )

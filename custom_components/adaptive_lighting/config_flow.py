@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover — HA < 2025.1 fallback for dev env
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
     EntitySelector,
@@ -68,6 +69,7 @@ from .const import (
     DEFAULT_SUNSET_ENTITY,
     DEFAULT_TRANSITION,
     DOMAIN,
+    RANGE_ENTITIES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -152,7 +154,6 @@ def _build_options_schema(
     show_send_split_delay: bool,
 ) -> vol.Schema:
     """Build the sectioned options schema from the entry's current values."""
-
     targets_section = section(
         vol.Schema(
             {
@@ -186,7 +187,10 @@ def _build_options_schema(
                 ): _color_temp_selector(),
                 vol.Required(
                     CONF_PREFER_RGB_COLOR,
-                    default=current.get(CONF_PREFER_RGB_COLOR, DEFAULT_PREFER_RGB_COLOR),
+                    default=current.get(
+                        CONF_PREFER_RGB_COLOR,
+                        DEFAULT_PREFER_RGB_COLOR,
+                    ),
                 ): BooleanSelector(),
             },
         ),
@@ -382,6 +386,24 @@ class OptionsFlowHandler(OptionsFlowWithReload):
         # Merge data and options to compute the effective "current" view.
         current = dict(conf.data)
         current.update(conf.options)
+
+        # Overlay live values from the four runtime range number entities
+        # so the dialog matches what the user's lights are actually running
+        # (spec R6, design D4). Other ~14 fields keep their `entry.options`
+        # values from above.
+        registry = er.async_get(self.hass)
+        for row in RANGE_ENTITIES:
+            unique_id = f"{conf.entry_id}_{row['field_key']}"
+            entity_id = registry.async_get_entity_id("number", DOMAIN, unique_id)
+            if entity_id is None:
+                continue
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in (None, "unavailable", "unknown"):
+                continue
+            try:
+                current[row["conf_key"]] = int(float(state.state))
+            except (TypeError, ValueError):
+                continue
 
         errors: dict[str, str] = {}
         if user_input is not None:

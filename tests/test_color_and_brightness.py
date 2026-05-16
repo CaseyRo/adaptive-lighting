@@ -41,23 +41,23 @@ class TestBrightnessCurve:
     """Spec R4: piecewise tanh ramp around the two sun events."""
 
     def test_min_brightness_more_than_half_width_before_sunrise(self, settings):
-        """t = sunrise − 2h → still deep night, brightness at minimum."""
+        """T = sunrise − 2h → still deep night, brightness at minimum."""
         t = T_SUNRISE - timedelta(hours=2)
         assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
 
     def test_min_brightness_exactly_at_clamp_boundary(self, settings):
-        """t = sunrise − half_width → exactly at the boundary, still min."""
+        """T = sunrise − half_width → exactly at the boundary, still min."""
         t = T_SUNRISE - timedelta(seconds=HALF_WIDTH)
         assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
 
     def test_midpoint_at_sunrise_event(self, settings):
-        """t = sunrise → exactly the midpoint of min and max by tanh symmetry."""
+        """T = sunrise → exactly the midpoint of min and max by tanh symmetry."""
         b = settings.brightness_pct(T_SUNRISE, T_SUNRISE, T_SUNSET)
         expected_mid = (5 + 100) / 2
         assert abs(b - expected_mid) < 0.5
 
     def test_max_brightness_30min_after_sunrise(self, settings):
-        """t = sunrise + half_width → fully ramped, brightness at max."""
+        """T = sunrise + half_width → fully ramped, brightness at max."""
         t = T_SUNRISE + timedelta(seconds=HALF_WIDTH)
         assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 100
 
@@ -67,12 +67,12 @@ class TestBrightnessCurve:
         assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 100
 
     def test_min_brightness_long_after_sunset(self, settings):
-        """t = sunset + 2h → back to minimum."""
+        """T = sunset + 2h → back to minimum."""
         t = T_SUNSET + timedelta(hours=2)
         assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
 
     def test_midpoint_at_sunset_event(self, settings):
-        """t = sunset → exact midpoint going down."""
+        """T = sunset → exact midpoint going down."""
         b = settings.brightness_pct(T_SUNSET, T_SUNRISE, T_SUNSET)
         expected_mid = (5 + 100) / 2
         assert abs(b - expected_mid) < 0.5
@@ -92,7 +92,8 @@ class TestColorTempCurve:
 
     def test_same_curve_shape_as_brightness(self, settings):
         """At any ramp-window point, the fraction of the curve should match
-        between brightness (5-100) and color temp (2200-5500)."""
+        between brightness (5-100) and color temp (2200-5500).
+        """
         # Pick a point inside the sunrise ramp window.
         t = T_SUNRISE + timedelta(minutes=10)
         b = settings.brightness_pct(t, T_SUNRISE, T_SUNSET)

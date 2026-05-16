@@ -21,7 +21,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["switch"]
+PLATFORMS = ["switch", "number"]
 
 # unique_id suffix(es) that this fork no longer creates. Any entity in the
 # registry whose unique_id ends with one of these strings AND that is owned
@@ -84,8 +84,7 @@ def _remove_orphan_sleep_entities(
         for entry in registry.entities.values()
         if entry.config_entry_id == config_entry.entry_id
         and any(
-            entry.unique_id.endswith(suffix)
-            for suffix in _REMOVED_UNIQUE_ID_SUFFIXES
+            entry.unique_id.endswith(suffix) for suffix in _REMOVED_UNIQUE_ID_SUFFIXES
         )
     ]
     for entity_id in entries_to_remove:
@@ -137,9 +136,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_forward_entry_unload(
+    unload_ok = await hass.config_entries.async_unload_platforms(
         config_entry,
-        "switch",
+        PLATFORMS,
     )
     data = hass.data[DOMAIN]
     if unload_ok:

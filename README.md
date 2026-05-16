@@ -64,6 +64,41 @@
 >
 > **Minimum Home Assistant version: `2025.1.0`** (pinned in `manifest.json`).
 >
+> ## ✨ What's new in 2.1
+>
+> Each profile now exposes **four live-tunable sliders** as `number`
+> entities you can drop on any Lovelace card:
+>
+> - `number.<profile>_min_brightness` — night-floor brightness (1–100 %)
+> - `number.<profile>_max_brightness` — peak-day brightness (1–100 %)
+> - `number.<profile>_min_color_temp` — warmest tone (1000–10000 K)
+> - `number.<profile>_max_color_temp` — coolest tone (1000–10000 K)
+>
+> **Slider position is the runtime truth.** Move a slider on the dashboard
+> and the curve picks it up on the next tick — no integration reload, no
+> restart. Position survives HA restarts via `RestoreNumber`.
+>
+> **Options dialog and sliders stay in sync.** Opening the options dialog
+> seeds the four range fields from the current slider values (not the
+> stale setup defaults). Saving the dialog resets the sliders to the
+> just-saved values — explicit gesture wins.
+>
+> Drop them on a dashboard:
+>
+> ```yaml
+> type: entities
+> entities:
+>   - number.dining_mvp_min_brightness
+>   - number.dining_mvp_max_brightness
+>   - number.dining_mvp_min_color_temp
+>   - number.dining_mvp_max_color_temp
+> ```
+>
+> Also in 2.1: **entity friendly names are now readable.** A profile named
+> "Dining MVP" exposes "Dining MVP", "Dining MVP Brightness", "Dining MVP
+> Color" — short enough to fit HA's tightest cards. Existing entity_ids
+> are preserved by the entity registry; automations keep working.
+>
 > The rest of this README is from upstream and may describe features that no
 > longer exist in this fork. See `CHANGELOG.md` for the canonical list of
 > CDiT-specific changes.

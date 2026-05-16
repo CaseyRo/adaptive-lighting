@@ -25,7 +25,8 @@ from custom_components.adaptive_lighting.const import (
 
 async def test_successful_setup_on_current_version(hass) -> None:
     """R8: an entry created on the current major succeeds and runs no
-    tombstone log line."""
+    tombstone log line.
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_NAME: DEFAULT_NAME},
@@ -42,7 +43,8 @@ async def test_successful_setup_on_current_version(hass) -> None:
 async def test_stale_version_raises_config_entry_error(hass, caplog) -> None:
     """R8: an entry created on the previous major fails with our
     ConfigEntryError, leaving the entry in the MIGRATION_ERROR state.
-    HA routes version mismatches through `async_migrate_entry`."""
+    HA routes version mismatches through `async_migrate_entry`.
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_NAME: DEFAULT_NAME},
@@ -79,7 +81,8 @@ async def test_unload_entry(hass) -> None:
 
 async def test_orphan_sleep_entity_is_removed_on_setup(hass, caplog) -> None:
     """R9: a leftover sleep_mode switch owned by this entry is removed and
-    one INFO log line is emitted."""
+    one INFO log line is emitted.
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_NAME: DEFAULT_NAME},
@@ -99,9 +102,9 @@ async def test_orphan_sleep_entity_is_removed_on_setup(hass, caplog) -> None:
     with caplog.at_level(logging.INFO):
         assert await hass.config_entries.async_setup(entry.entry_id)
 
-    assert registry.async_get(orphan.entity_id) is None, (
-        "Orphan sleep entity should have been removed."
-    )
+    assert (
+        registry.async_get(orphan.entity_id) is None
+    ), "Orphan sleep entity should have been removed."
     # One INFO log line naming the entity ID.
     assert any(
         orphan.entity_id in record.message
@@ -132,7 +135,8 @@ async def test_tombstone_helper_is_idempotent(hass, caplog) -> None:
 
 async def test_tombstone_skips_foreign_entities(hass, caplog) -> None:
     """R9 + D12: an entity matching the name pattern but owned by another
-    config entry is not removed."""
+    config entry is not removed.
+    """
     our_entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_NAME: DEFAULT_NAME},
@@ -158,6 +162,6 @@ async def test_tombstone_skips_foreign_entities(hass, caplog) -> None:
 
     assert await hass.config_entries.async_setup(our_entry.entry_id)
 
-    assert registry.async_get(foreign_entity.entity_id) is not None, (
-        "Foreign-owned entity matching name pattern must not be removed."
-    )
+    assert (
+        registry.async_get(foreign_entity.entity_id) is not None
+    ), "Foreign-owned entity matching name pattern must not be removed."

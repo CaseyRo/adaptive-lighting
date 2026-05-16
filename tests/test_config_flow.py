@@ -105,7 +105,8 @@ def test_options_schema_has_all_six_sections_in_order() -> None:
 
 def test_each_section_contains_only_its_specified_fields() -> None:
     """R1 scenario 2: every field appears in exactly one section, matching
-    the layout table."""
+    the layout table.
+    """
     schema = _build_options_schema({}, show_send_split_delay=True)
     for marker in schema.schema:  # type: ignore[attr-defined]
         section_id = marker.schema if hasattr(marker, "schema") else marker
@@ -114,9 +115,9 @@ def test_each_section_contains_only_its_specified_fields() -> None:
         # Advanced gains send_split_delay when its driver is true.
         if section_id == SECTION_ADVANCED:
             expected.add(CONF_SEND_SPLIT_DELAY)
-        assert inner_fields == expected, (
-            f"section {section_id}: expected {expected}, got {inner_fields}"
-        )
+        assert (
+            inner_fields == expected
+        ), f"section {section_id}: expected {expected}, got {inner_fields}"
 
 
 # ---------------------------------------------------------------------------
@@ -167,13 +168,22 @@ def test_default_sunrise_and_sunset_entities() -> None:
         for k in sun_inner
         if hasattr(k, "default")
     }
-    assert defaults[CONF_SUNRISE_ENTITY] == DEFAULT_SUNRISE_ENTITY == "sensor.sun_next_rising"
-    assert defaults[CONF_SUNSET_ENTITY] == DEFAULT_SUNSET_ENTITY == "sensor.sun_next_setting"
+    assert (
+        defaults[CONF_SUNRISE_ENTITY]
+        == DEFAULT_SUNRISE_ENTITY
+        == "sensor.sun_next_rising"
+    )
+    assert (
+        defaults[CONF_SUNSET_ENTITY]
+        == DEFAULT_SUNSET_ENTITY
+        == "sensor.sun_next_setting"
+    )
 
 
 def test_sun_entity_selectors_are_strict_timestamp_sensors() -> None:
     """R3 + D14: both sun-event entity selectors filter by domain=sensor and
-    device_class=timestamp."""
+    device_class=timestamp.
+    """
     schema = _build_options_schema({}, show_send_split_delay=False)
     sun_marker = next(
         m
@@ -258,9 +268,10 @@ def test_booleans_use_boolean_selector() -> None:
         for k, v in section.schema.schema.items():
             field_name = k.schema if hasattr(k, "schema") else k
             if field_name in boolean_fields:
-                assert isinstance(v, BooleanSelector), (
-                    f"{field_name} is {type(v).__name__}, expected BooleanSelector"
-                )
+                assert isinstance(
+                    v,
+                    BooleanSelector,
+                ), f"{field_name} is {type(v).__name__}, expected BooleanSelector"
 
 
 # ---------------------------------------------------------------------------

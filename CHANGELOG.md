@@ -26,6 +26,45 @@ maintainers who can actually fix them for everyone.
 
 ---
 
+## [2.1.0-cdit.1] — Unreleased
+
+### Added
+
+- **Four live-tunable `number` entities per profile** — `min_brightness`,
+  `max_brightness`, `min_color_temp`, `max_color_temp`. Drop the four
+  sliders onto any Lovelace card to tune the curve from the dashboard
+  without opening the options dialog. Slider position persists across
+  Home Assistant restarts via `RestoreNumber`.
+- **Curve math reads the runtime values from the entities on every tick**
+  (with a fallback to `entry.options` when an entity is unavailable, e.g.,
+  during early-setup races). Slider changes take effect on the next
+  curve evaluation — no integration reload, no restart.
+- **Options-flow opens with current slider values, not stale options**
+  — if you tweaked the slider on the dashboard, the dialog shows the
+  current value, not the value you typed in at setup. Saving the dialog
+  resets the sliders to the just-saved values (explicit gesture wins).
+
+### Changed
+
+- **Entity friendly names use HA's `has_entity_name` composition.** For a
+  profile named "Dining MVP" you now see "Dining MVP", "Dining MVP
+  Brightness", "Dining MVP Color" on the dashboard instead of "Adaptive
+  Lighting Adapt Brightness dining_mvp_lights" (which truncated to
+  "Adaptive Lighting Adapt Br…"). Existing entity_ids are preserved by
+  the entity registry — automations and scripts referencing them keep
+  working.
+- **`manifest.json` version bumped to `2.1.0-cdit.1`.** Minor bump; no
+  breaking config-entry changes — existing 2.0 entries upgrade in place
+  and gain the four new number entities on next setup.
+
+### Migration
+
+No user action required for existing 2.0 installs — restart HA after the
+upgrade and the four new entities appear under each profile's device
+page, seeded with that profile's current options values.
+
+---
+
 ## [2.0.0-cdit.1] — Unreleased
 
 The first major CDiT release. **Breaking change**: existing upstream config

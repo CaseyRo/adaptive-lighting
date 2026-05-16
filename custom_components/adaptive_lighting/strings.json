@@ -243,5 +243,21 @@
     "incompatible_version": {
       "message": "Adaptive Lighting v{current_version} (CDiT fork) is incompatible with the existing config entry (version {entry_version}). Delete the entry from Settings → Devices & Services and create a new one."
     }
+  },
+  "entity": {
+    "number": {
+      "min_brightness": {
+        "name": "Min brightness"
+      },
+      "max_brightness": {
+        "name": "Max brightness"
+      },
+      "min_color_temp": {
+        "name": "Min color temp"
+      },
+      "max_color_temp": {
+        "name": "Max color temp"
+      }
+    }
   }
 }
