@@ -81,25 +81,35 @@ For each config entry, the integration SHALL synthesize the daytime brightness a
 
 The same curve shape SHALL be applied to color temperature using `min_color_temp` and `max_color_temp` as the curve bounds.
 
+The four bound values (`min_brightness`, `max_brightness`, `min_color_temp`, `max_color_temp`) SHALL be read at evaluation time from the four runtime range entities defined in the `runtime-range-controls` capability, with fallback to `entry.options[CONF_*]` when an entity is unavailable. The curve evaluation SHALL NOT read these four values directly from `entry.options` during normal operation.
+
 #### Scenario: Brightness is at minimum well before sunrise
 
 - **WHEN** the current time is more than 30 minutes before the `sunrise_entity` timestamp
-- **THEN** the computed brightness SHALL equal the configured `min_brightness`
+- **THEN** the computed brightness SHALL equal the current value of `number.adaptive_lighting_<name>_min_brightness`
 
 #### Scenario: Brightness is exactly at the midpoint at the sunrise event
 
 - **WHEN** the current time equals the `sunrise_entity` timestamp
-- **THEN** the computed brightness SHALL equal `(min_brightness + max_brightness) / 2`
+- **THEN** the computed brightness SHALL equal `(current_min_brightness + current_max_brightness) / 2`
+- **WHERE** `current_min_brightness` and `current_max_brightness` are the current states of the corresponding number entities
 
 #### Scenario: Brightness is at maximum during the day
 
 - **WHEN** the current time is between `sunrise_entity + 30min` and `sunset_entity − 30min`
-- **THEN** the computed brightness SHALL equal the configured `max_brightness`
+- **THEN** the computed brightness SHALL equal the current value of `number.adaptive_lighting_<name>_max_brightness`
 
 #### Scenario: Color temperature follows the same curve shape
 
 - **WHEN** the current time is at any point on the curve
-- **THEN** the computed color temperature SHALL follow the same tanh interpolation between `min_color_temp` and `max_color_temp` as the brightness curve does between `min_brightness` and `max_brightness`
+- **THEN** the computed color temperature SHALL follow the same tanh interpolation between the current values of `number.adaptive_lighting_<name>_min_color_temp` and `_max_color_temp` as the brightness curve does between the two brightness entities
+
+#### Scenario: Bound values are taken from runtime entities, not from entry.options
+
+- **GIVEN** `entry.options[CONF_MIN_BRIGHTNESS]` is 5
+- **AND** `number.adaptive_lighting_<name>_min_brightness` is at 30
+- **WHEN** the curve is evaluated at a time before `sunrise_entity − 1800s`
+- **THEN** the computed brightness SHALL equal 30 (the entity state), not 5 (`entry.options`)
 
 ### Requirement: All configurable fields use native HA selectors
 
@@ -196,3 +206,4 @@ On `async_setup_entry`, the integration SHALL scan the entity registry for entit
 - **WHEN** the integration runs the sleep-switch cleanup
 - **AND** another integration owns a similarly named entity (e.g., a user-created `switch.adaptive_lighting_sleep_mode_demo` template switch)
 - **THEN** that foreign entity SHALL NOT be removed from the entity registry
+

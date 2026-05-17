@@ -47,7 +47,7 @@ Build order: group 1 is platform foundation. Group 2 implements the entity class
 - [x] 6.2 Set `_attr_name` per the D11 table: `AdaptiveSwitch._attr_name = None` (master takes device name), `AdaptBrightnessSwitch._attr_name = "Brightness"`, `AdaptColorSwitch._attr_name = "Color"`. Delete any code that hand-composes "Adaptive Lighting …" into the friendly name. [R7, D11]
 - [x] 6.3 Confirm the shared `device_info` block sets `name = entry.title` (or `entry.data[CONF_NAME]`, whichever is the user-facing string). This is the anchor for the composed friendly names. [R7, D11]
 - [x] 6.4 Verify `unique_id`s are NOT changed by this group — only `_attr_name` and `_attr_has_entity_name`. The entity registry must keep existing entity_ids stable. [R7, D11]
-- [ ] 6.5 Manual check on live HA after deploy: pre-existing entity_ids unchanged (no duplicates, no broken automations), friendly names now read as "Dining MVP Brightness" / "Dining MVP Color" instead of "Adaptive Lighting Adapt Brightness dining_mvp_lights". [R7, D11]
+- [x] 6.5 Manual check on live HA after deploy: pre-existing entity_ids unchanged (no duplicates, no broken automations), friendly names now read as "Dining MVP Brightness" / "Dining MVP Color" instead of "Adaptive Lighting Adapt Brightness dining_mvp_lights". [R7, D11]
 
 ## 7. Tests — `tests/test_number_platform.py`
 
@@ -74,11 +74,11 @@ Build order: group 1 is platform foundation. Group 2 implements the entity class
 
 ## 9. Manual verification on live HA
 
-- [ ] 9.1 Deploy to `homeassistant.onca-blenny.ts.net` via HACS. Verify the four `number.adaptive_lighting_*` entities appear under each of the 6 profiles' devices. [R1]
-- [ ] 9.2 Move a slider on one profile via the dashboard. Verify (a) no integration reload occurs (check Integration page → no "reloading" banner; entity IDs unchanged), (b) the next curve tick uses the new value (watch the master switch's `brightness_pct` attribute over ~90 s). [R3, R4]
-- [ ] 9.3 Open the options flow on the same profile. Verify the four range fields show the just-moved slider values, not the original setup defaults. [R6]
-- [ ] 9.4 Save the options flow with different values. Verify the sliders snap to the new values after reload. [R5, D3]
-- [ ] 9.5 Restart HA. Verify the slider values persist (RestoreNumber works). [R2]
+- [x] 9.1 Deploy to `homeassistant.onca-blenny.ts.net` via HACS. Verify the four `number.adaptive_lighting_*` entities appear under each of the 6 profiles' devices. [R1]
+- [x] 9.2 Move a slider on one profile via the dashboard. Verify (a) no integration reload occurs (check Integration page → no "reloading" banner; entity IDs unchanged), (b) the next curve tick uses the new value (watch the master switch's `brightness_pct` attribute over ~90 s). [R3, R4]
+- [x] 9.3 Open the options flow on the same profile. Verify the four range fields show the just-moved slider values, not the original setup defaults. [R6]
+- [x] 9.4 Save the options flow with different values. Verify the sliders snap to the new values after reload. [R5, D3]
+- [x] 9.5 Restart HA. Verify the slider values persist (RestoreNumber works). [R2]
 
 ## 10. Validation gate
 
