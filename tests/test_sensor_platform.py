@@ -49,7 +49,9 @@ def _unique_id(entry, key: str) -> str:
 
 def _resolve_entity_id(hass, entry, key: str) -> str | None:
     return er.async_get(hass).async_get_entity_id(
-        "sensor", DOMAIN, _unique_id(entry, key),
+        "sensor",
+        DOMAIN,
+        _unique_id(entry, key),
     )
 
 
@@ -63,7 +65,9 @@ async def test_three_sensor_entities_registered(hass) -> None:
     registry = er.async_get(hass)
     for key in SENSOR_KEYS:
         eid = registry.async_get_entity_id(
-            "sensor", DOMAIN, _unique_id(entry, key),
+            "sensor",
+            DOMAIN,
+            _unique_id(entry, key),
         )
         assert eid is not None, f"Missing sensor entity for {key}"
         assert eid.startswith("sensor.")
@@ -331,9 +335,9 @@ async def test_friendly_names_compose_correctly(hass) -> None:
         if fname in names.values():
             continue
         # Any other entity's friendly name must not match a sensor's.
-        assert fname not in all_friendly, (
-            f"Collision: {fname} appears on both sensor and another entity"
-        )
+        assert (
+            fname not in all_friendly
+        ), f"Collision: {fname} appears on both sensor and another entity"
 
 
 # ---------------------------------------------------------------------------
@@ -370,11 +374,13 @@ async def test_unload_detaches_dispatcher(hass) -> None:
     # dispatcher subscription leaked.
     ent_reg = er.async_get(hass)
     eid = ent_reg.async_get_entity_id(
-        "sensor", DOMAIN, _unique_id(entry, "output_brightness"),
+        "sensor",
+        DOMAIN,
+        _unique_id(entry, "output_brightness"),
     )
     if eid is not None:
         state = hass.states.get(eid)
         if state is not None:
-            assert state.state != "99", (
-                "Dispatcher subscription leaked: sensor updated after unload"
-            )
+            assert (
+                state.state != "99"
+            ), "Dispatcher subscription leaked: sensor updated after unload"

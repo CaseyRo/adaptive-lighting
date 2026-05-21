@@ -112,9 +112,7 @@ class AdaptiveOutputSensor(SensorEntity):
     def _handle_outputs_updated(self) -> None:
         """Read this sensor's value from the cache and write state."""
         outputs = (
-            self._hass.data.get(DOMAIN, {})
-            .get(self._entry.entry_id, {})
-            .get("outputs")
+            self._hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {}).get("outputs")
         )
         if not outputs:
             # Early signal (e.g., setup race) — leave state as unknown.
