@@ -99,6 +99,33 @@
 > Color" — short enough to fit HA's tightest cards. Existing entity_ids
 > are preserved by the entity registry; automations keep working.
 >
+> ## ✨ What's new in 2.2
+>
+> Each profile now exposes **three read-only `sensor` entities** that
+> publish the curve's current outputs alongside the sun's actual elevation
+> — graphable as numerics by HA's recorder, the History panel,
+> `apexcharts-card`, and `mini-graph-card`:
+>
+> - `sensor.<profile>_output_brightness` — current target brightness (%)
+> - `sensor.<profile>_output_color_temp` — current target color temp (K)
+> - `sensor.<profile>_sun_elevation` — solar elevation from `sun.sun` (°)
+>
+> The existing master-switch attributes (`brightness_pct`,
+> `color_temp_kelvin`, the synthetic `sun_position` in [-1, +1]) are
+> unchanged — anything reading them today keeps working. The sensors are
+> the *graphable* version of the same data.
+>
+> Drop them on a dashboard with `apexcharts-card` to see the curve over time:
+>
+> ```yaml
+> type: custom:apexcharts-card
+> graph_span: 24h
+> series:
+>   - entity: sensor.dining_mvp_output_brightness
+>   - entity: sensor.dining_mvp_output_color_temp
+>   - entity: sensor.dining_mvp_sun_elevation
+> ```
+>
 > The rest of this README is from upstream and may describe features that no
 > longer exist in this fork. See `CHANGELOG.md` for the canonical list of
 > CDiT-specific changes.

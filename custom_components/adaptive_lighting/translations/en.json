@@ -258,6 +258,17 @@
       "max_color_temp": {
         "name": "Max color temp"
       }
+    },
+    "sensor": {
+      "output_brightness": {
+        "name": "Output brightness"
+      },
+      "output_color_temp": {
+        "name": "Output color temp"
+      },
+      "sun_elevation": {
+        "name": "Sun elevation"
+      }
     }
   }
 }

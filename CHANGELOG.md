@@ -26,6 +26,42 @@ maintainers who can actually fix them for everyone.
 
 ---
 
+## [2.2.0-cdit.1] — Unreleased
+
+### Added
+
+- **Three read-only `sensor` entities per profile** — `output_brightness`
+  (%), `output_color_temp` (K), `sun_elevation` (°). They expose the
+  curve's current target outputs alongside HA's built-in `sun.sun`
+  elevation as graphable numerics with `state_class: measurement`, so
+  the History panel, `apexcharts-card`, and `mini-graph-card` chart
+  them natively. The existing master-switch attributes (`brightness_pct`,
+  `color_temp_kelvin`, the synthetic `sun_position` in [-1, +1]) are
+  unchanged.
+- **Push-based sensor updates** via a per-entry dispatcher signal fired
+  by the master switch after each curve tick. No polling, no duplicate
+  curve math — sensors are pure readers of a runtime cache the master
+  switch publishes to.
+- **`sun_elevation` is sourced from `sun.sun.attributes.elevation`** on
+  every curve tick. If `sun.sun` is missing or the attribute is absent
+  (rare; can happen during very early HA startup), the sensor renders
+  as `unknown` for that tick — the other two sensors continue updating
+  normally.
+
+### Changed
+
+- **`manifest.json` version bumped to `2.2.0-cdit.1`.** Minor bump; no
+  breaking config-entry changes — existing 2.1 entries upgrade in place
+  and gain the three new sensor entities on next setup.
+
+### Migration
+
+No user action required. Restart HA after upgrade and the three new
+sensors appear under each profile's device page. Add them to a Lovelace
+card or `apexcharts-card` to start graphing.
+
+---
+
 ## [2.1.0-cdit.1] — Unreleased
 
 ### Added

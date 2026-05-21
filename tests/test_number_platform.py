@@ -26,7 +26,6 @@ from custom_components.adaptive_lighting.const import (
     CONF_MIN_COLOR_TEMP,
     CONFIG_ENTRY_VERSION,
     DOMAIN,
-    RANGE_ENTITIES,
 )
 
 PROFILE_NAME = "test_profile"
@@ -52,7 +51,9 @@ def _unique_id(entry, field_key: str) -> str:
 
 def _resolve_entity_id(hass, entry, field_key: str) -> str | None:
     return er.async_get(hass).async_get_entity_id(
-        "number", DOMAIN, _unique_id(entry, field_key),
+        "number",
+        DOMAIN,
+        _unique_id(entry, field_key),
     )
 
 
@@ -66,7 +67,9 @@ async def test_four_range_entities_registered(hass) -> None:
     registry = er.async_get(hass)
     for field_key in FIELD_KEYS:
         eid = registry.async_get_entity_id(
-            "number", DOMAIN, _unique_id(entry, field_key),
+            "number",
+            DOMAIN,
+            _unique_id(entry, field_key),
         )
         assert eid is not None, f"Missing number entity for {field_key}"
         assert eid.startswith("number.")
@@ -276,13 +279,9 @@ async def test_options_flow_seeds_from_entity_state(hass) -> None:
     assert result["type"] == "form"
     schema = result["data_schema"].schema
     # Find the daytime_curve section and walk its inner schema to find max_brightness default
-    daytime = next(
-        sub for k, sub in schema.items() if str(k) == "daytime_curve"
-    )
+    daytime = next(sub for k, sub in schema.items() if str(k) == "daytime_curve")
     inner = daytime.schema.schema
-    max_b_default = next(
-        k.default() for k in inner if str(k) == CONF_MAX_BRIGHTNESS
-    )
+    max_b_default = next(k.default() for k in inner if str(k) == CONF_MAX_BRIGHTNESS)
     assert max_b_default == 80  # entity wins over options
 
 
@@ -300,9 +299,7 @@ async def test_options_flow_fallback_when_entity_unavailable(hass) -> None:
     schema = result["data_schema"].schema
     daytime = next(sub for k, sub in schema.items() if str(k) == "daytime_curve")
     inner = daytime.schema.schema
-    default = next(
-        k.default() for k in inner if str(k) == CONF_MIN_COLOR_TEMP
-    )
+    default = next(k.default() for k in inner if str(k) == CONF_MIN_COLOR_TEMP)
     assert default == 2500  # falls back to options
 
 
@@ -351,6 +348,7 @@ async def test_curve_math_falls_back_on_unavailable(hass, caplog) -> None:
     al_switch = al_data["switch"]
 
     import logging
+
     caplog.set_level(logging.DEBUG)
     settings = al_switch.sun_light_settings
     assert settings.max_brightness == 88  # fell back to options

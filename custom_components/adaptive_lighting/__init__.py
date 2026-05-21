@@ -21,7 +21,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["switch", "number"]
+PLATFORMS = ["switch", "number", "sensor"]
 
 # unique_id suffix(es) that this fork no longer creates. Any entity in the
 # registry whose unique_id ends with one of these strings AND that is owned
@@ -128,7 +128,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # and explicit `hass.reload_config_entry` calls).
     hass.bus.async_listen("hass.config.entry_updated", reload_configuration_yaml)
 
-    data[config_entry.entry_id] = {}
+    data[config_entry.entry_id] = {
+        # Cache slot the master switch publishes to after each curve tick
+        # (add-output-sensors / D2). Initialized to None so any sensor that
+        # reads before the first tick sees a sentinel rather than a KeyError.
+        "outputs": None,
+    }
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     return True

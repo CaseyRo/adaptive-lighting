@@ -8,7 +8,7 @@ For each Adaptive Lighting config entry, the integration SHALL create exactly th
 |---|---|---|---|---|---|---|
 | Output brightness | `_output_brightness` | `"Output brightness"` | `"%"` | `MEASUREMENT` | (none) | `mdi:brightness-percent` |
 | Output color temperature | `_output_color_temp` | `"Output color temp"` | `"K"` | `MEASUREMENT` | (none) | `mdi:thermometer` |
-| Sun position | `_sun_position` | `"Sun position"` | `"°"` | `MEASUREMENT` | (none) | `mdi:weather-sunset` |
+| Sun elevation | `_sun_elevation` | `"Sun elevation"` | `"°"` | `MEASUREMENT` | (none) | `mdi:weather-sunset` |
 
 The full `unique_id` SHALL be `<entry.entry_id>_<suffix>`.
 
@@ -17,7 +17,7 @@ The full `unique_id` SHALL be `<entry.entry_id>_<suffix>`.
 - **WHEN** the user creates a new Adaptive Lighting config entry
 - **AND** `async_setup_entry` completes
 - **THEN** the entity registry SHALL contain three `sensor` entities owned by this entry
-- **AND** their unique_ids SHALL end with `_output_brightness`, `_output_color_temp`, and `_sun_position` respectively
+- **AND** their unique_ids SHALL end with `_output_brightness`, `_output_color_temp`, and `_sun_elevation` respectively
 - **AND** all three sensors SHALL be attached to the same device as the profile's switches and number entities
 
 #### Scenario: Sensor metadata matches the design table
@@ -25,11 +25,13 @@ The full `unique_id` SHALL be `<entry.entry_id>_<suffix>`.
 - **WHEN** any of the three sensors is inspected via the entity registry
 - **THEN** `output_brightness` SHALL declare `native_unit_of_measurement="%"`, `state_class=SensorStateClass.MEASUREMENT`, no `device_class`
 - **AND** `output_color_temp` SHALL declare `native_unit_of_measurement="K"`, `state_class=SensorStateClass.MEASUREMENT`, no `device_class`
-- **AND** `sun_position` SHALL declare `native_unit_of_measurement="°"`, `state_class=SensorStateClass.MEASUREMENT`, no `device_class`
+- **AND** `sun_elevation` SHALL declare `native_unit_of_measurement="°"`, `state_class=SensorStateClass.MEASUREMENT`, no `device_class`
 
 ### Requirement: Curve evaluation publishes outputs to a runtime cache
 
-On every curve evaluation tick, the master switch (`AdaptiveSwitch`) SHALL publish its three computed output values to `hass.data[DOMAIN][entry.entry_id]["outputs"]` as a dictionary with keys `output_brightness` (int 0-100), `output_color_temp` (int Kelvin), `sun_position` (float, degrees of solar elevation), and `updated_at` (datetime). This publish SHALL happen after the curve math completes and before any state writes to the switch's own attributes.
+On every curve evaluation tick, the master switch (`AdaptiveSwitch`) SHALL publish to `hass.data[DOMAIN][entry.entry_id]["outputs"]` a dictionary with keys `output_brightness` (int 0-100, sourced from `self._settings["brightness_pct"]`), `output_color_temp` (int Kelvin, sourced from `self._settings["color_temp_kelvin"]`), `sun_elevation` (float degrees or `None`, sourced from `hass.states.get("sun.sun").attributes.get("elevation")`), and `updated_at` (datetime). This publish SHALL happen after the curve math completes and before any state writes to the switch's own attributes.
+
+If `sun.sun` is missing from the state machine or its `elevation` attribute is absent, `sun_elevation` in the cache SHALL be `None`; the other three keys SHALL still be populated normally.
 
 The cache dict keys SHALL match the `OUTPUT_SENSORS[*]["key"]` values exactly, so sensors read `hass.data[DOMAIN][entry.entry_id]["outputs"][self._output_key]` with no intermediate mapping.
 
@@ -38,16 +40,26 @@ The integration SHALL NOT cause the sensor entities to recompute the curve. Sens
 #### Scenario: Each curve tick refreshes the runtime cache
 
 - **GIVEN** the integration is loaded and the master switch's adapt loop is running
+- **AND** `sun.sun.attributes.elevation` is populated
 - **WHEN** a curve evaluation tick completes
-- **THEN** `hass.data[DOMAIN][entry.entry_id]["outputs"]` SHALL contain the four keys `output_brightness`, `output_color_temp`, `sun_position`, `updated_at`
-- **AND** the values SHALL be the just-computed curve outputs
+- **THEN** `hass.data[DOMAIN][entry.entry_id]["outputs"]` SHALL contain the four keys `output_brightness`, `output_color_temp`, `sun_elevation`, `updated_at`
+- **AND** the values SHALL be the just-computed curve outputs (for the first two) and the current `sun.sun` elevation (for the third)
 - **AND** `updated_at` SHALL be a `datetime` no older than the previous tick's `updated_at` value
+
+#### Scenario: `sun.sun` unavailability does not block the publish
+
+- **GIVEN** the integration is loaded and the master switch's adapt loop is running
+- **AND** `hass.states.get("sun.sun")` returns `None` (or its `elevation` attribute is absent)
+- **WHEN** a curve evaluation tick completes
+- **THEN** `hass.data[DOMAIN][entry.entry_id]["outputs"]["sun_elevation"]` SHALL be `None`
+- **AND** `output_brightness` and `output_color_temp` SHALL still hold their computed values
+- **AND** no exception SHALL propagate out of the publish step
 
 #### Scenario: Sensors do not perform their own curve math
 
 - **WHEN** a sensor entity's `async_added_to_hass` and `_handle_outputs_updated` methods are inspected
 - **THEN** neither method SHALL import `SunLightSettings` or any curve-computation helper
-- **AND** neither method SHALL call `hass.states.get` for the sun-time entities or the four range number entities
+- **AND** neither method SHALL call `hass.states.get` for the sun-time entities, the four range number entities, or `sun.sun`
 
 ### Requirement: Sensors update via a per-entry dispatcher signal
 
@@ -98,7 +110,7 @@ Sensors SHALL NOT extend `RestoreEntity` or `RestoreSensor`. On entity addition 
 
 ### Requirement: Sensors follow the `has_entity_name` composition
 
-Every sensor entity created by this change SHALL set `_attr_has_entity_name = True` and SHALL register under the existing device record (`(DOMAIN, entry.entry_id)`) whose `name` is `entry.title`. Each sensor's `_attr_name` SHALL be exactly the role label from the table in the first requirement of this spec: `"Output brightness"`, `"Output color temp"`, `"Sun position"`.
+Every sensor entity created by this change SHALL set `_attr_has_entity_name = True` and SHALL register under the existing per-profile device record whose `name` matches the profile's display name (i.e. attached to the same device as the profile's switches and number entities). Each sensor's `_attr_name` SHALL be exactly the role label from the table in the first requirement of this spec: `"Output brightness"`, `"Output color temp"`, `"Sun elevation"`.
 
 The resulting friendly names SHALL follow this table for a profile named `Dining MVP`:
 
@@ -106,7 +118,7 @@ The resulting friendly names SHALL follow this table for a profile named `Dining
 |---|---|---|
 | Output-brightness sensor | `"Output brightness"` | `Dining MVP Output brightness` |
 | Output-color-temp sensor | `"Output color temp"` | `Dining MVP Output color temp` |
-| Sun-position sensor | `"Sun position"` | `Dining MVP Sun position` |
+| Sun-elevation sensor | `"Sun elevation"` | `Dining MVP Sun elevation` |
 
 The chosen role labels SHALL NOT collide with any existing entity's `_attr_name` on the same device (specifically: not `"Brightness"`, which is the adapt-brightness switch's role per `add-runtime-range-controls`, and not `"Min color temp"` / `"Max color temp"`, which are the range-number roles).
 
@@ -116,7 +128,7 @@ The chosen role labels SHALL NOT collide with any existing entity's `_attr_name`
 - **WHEN** the integration loads and the three sensors are registered
 - **THEN** the output-brightness sensor's friendly name SHALL be exactly "Dining MVP Output brightness"
 - **AND** the output-color-temp sensor's friendly name SHALL be exactly "Dining MVP Output color temp"
-- **AND** the sun-position sensor's friendly name SHALL be exactly "Dining MVP Sun position"
+- **AND** the sun-elevation sensor's friendly name SHALL be exactly "Dining MVP Sun elevation"
 
 #### Scenario: Sensor friendly names do not collide with switch or number friendly names
 

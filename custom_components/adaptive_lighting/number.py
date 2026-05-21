@@ -19,7 +19,7 @@ integration, and the resulting fresh entities prefer the just-saved
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.number import (
     NumberMode,

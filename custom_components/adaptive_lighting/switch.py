@@ -57,6 +57,7 @@ from homeassistant.core import (
 )
 from homeassistant.helpers import entity_platform, entity_registry
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_component import async_update_entity
 from homeassistant.helpers.event import (
     EventStateChangedData,
@@ -112,6 +113,7 @@ from .const import (
     RAMP_HALF_WIDTH_SECONDS,
     SERVICE_APPLY,
     SERVICE_CHANGE_SWITCH_SETTINGS,
+    SIGNAL_OUTPUTS_UPDATED,
     TURNING_OFF_DELAY,
     VALIDATION_TUPLES,
     apply_service_schema,
@@ -1351,6 +1353,34 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
                 data,
             )
 
+    def _publish_outputs_and_wake_sensors(self) -> None:
+        """Publish curve outputs to the runtime cache and wake the sensors.
+
+        Writes ``hass.data[DOMAIN][entry_id]["outputs"]`` from the
+        just-populated ``self._settings`` plus the current ``sun.sun``
+        elevation, then fires a per-entry dispatcher signal so the three
+        ``sensor.<profile>_*`` entities update their state on the same
+        tick rhythm as the switch itself. See
+        ``add-output-sensors/design.md`` decisions 2, 3, and 8.
+        """
+        sun_state = self.hass.states.get("sun.sun")
+        sun_elevation = (
+            sun_state.attributes.get("elevation") if sun_state is not None else None
+        )
+        brightness = self._settings.get("brightness_pct")
+        color_temp = self._settings.get("color_temp_kelvin")
+        entry_data = self.hass.data[DOMAIN].setdefault(self._config_entry.entry_id, {})
+        entry_data["outputs"] = {
+            "output_brightness": int(brightness) if brightness is not None else None,
+            "output_color_temp": int(color_temp) if color_temp is not None else None,
+            "sun_elevation": sun_elevation,
+            "updated_at": dt_util.utcnow(),
+        }
+        async_dispatcher_send(
+            self.hass,
+            SIGNAL_OUTPUTS_UPDATED.format(entry_id=self._config_entry.entry_id),
+        )
+
     async def _update_attrs_and_maybe_adapt_lights(
         self,
         *,
@@ -1380,6 +1410,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
                     t_sunset,
                 ),
             )
+        self._publish_outputs_and_wake_sensors()
         self.async_write_ha_state()
 
         if lights is None:

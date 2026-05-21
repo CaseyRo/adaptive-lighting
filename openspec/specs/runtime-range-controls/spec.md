@@ -139,4 +139,3 @@ Existing `unique_id`s SHALL remain unchanged; the entity registry SHALL preserve
 - **AND** HA reloads the config entry
 - **THEN** the entity's `entity_id` SHALL remain `switch.adaptive_lighting_adapt_brightness_dining_mvp_lights` (preserved by the registry via stable `unique_id`)
 - **AND** only the entity's friendly name SHALL update to follow the new composition
-

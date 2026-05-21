@@ -196,6 +196,37 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
     },
 ]
 
+# Output sensor declarations (add-output-sensors / R1, D4, D7).
+# Each dict drives one read-only `sensor` entity per AL profile. The `key`
+# becomes both the sensor's unique-id suffix AND the cache-dict key in
+# `hass.data[DOMAIN][entry_id]["outputs"]`, so the sensor reads
+# `outputs[self._output_key]` with no intermediate mapping.
+OUTPUT_SENSORS: list[dict[str, Any]] = [
+    {
+        "key": "output_brightness",
+        "name": "Output brightness",
+        "unit": "%",
+        "icon": "mdi:brightness-percent",
+    },
+    {
+        "key": "output_color_temp",
+        "name": "Output color temp",
+        "unit": "K",
+        "icon": "mdi:thermometer",
+    },
+    {
+        "key": "sun_elevation",
+        "name": "Sun elevation",
+        "unit": "°",
+        "icon": "mdi:weather-sunset",
+    },
+]
+
+# Dispatcher signal used by the master switch to wake the output sensors
+# after each curve tick. Keyed per config entry so two profiles don't
+# cross-update. Format with `.format(entry_id=...)` at call/connect time.
+SIGNAL_OUTPUTS_UPDATED = f"{DOMAIN}_{{entry_id}}_outputs_updated"
+
 ATTR_ADAPT_COLOR = "adapt_color"
 DOCS[ATTR_ADAPT_COLOR] = "Adjust the color of supporting lights over the day."
 ATTR_ADAPT_BRIGHTNESS = "adapt_brightness"
