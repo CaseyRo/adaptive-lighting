@@ -65,11 +65,11 @@ validation gate.
 
 ## 6. Manual verification on live HA
 
-- [ ] 6.1 Deploy to `homeassistant.onca-blenny.ts.net` via HACS. Verify the three `sensor.adaptive_lighting_*` entities (`_output_brightness`, `_output_color_temp`, `_sun_elevation`) appear under each profile's device. [R1, polish]
-- [ ] 6.2 Open the History panel for one profile's `output_brightness` sensor. Verify the curve over ~10 minutes shows numeric values graphed as a continuous line (proves `state_class=MEASUREMENT` is honored by the recorder). Repeat for `output_color_temp` and `sun_elevation` (the last should match `sun.sun.attributes.elevation` and range roughly -90° to +90° over a day). [R1, D4, D8]
-- [ ] 6.3 Add a temporary `apexcharts-card` to a dashboard pointing at one profile's three sensors. Verify all three render as numeric series. [R1, D4]
-- [ ] 6.4 Restart HA. Verify each sensor briefly shows `unknown`, then populates with a value within one curve interval (default 90 s). [R4]
-- [ ] 6.5 Verify the existing master switch attributes (`brightness_pct`, `color_temp_kelvin`, and the synthetic `sun_position` in [-1, +1] — all from `self._settings`) are still present and unchanged on the switch entity's state — the sensors are additive, not a replacement. [polish, D2]
+- [x] 6.1 Deploy to `homeassistant.onca-blenny.ts.net` via HACS. Verify the three `sensor.adaptive_lighting_*` entities (`_output_brightness`, `_output_color_temp`, `_sun_elevation`) appear under each profile's device. [R1, polish]
+- [x] 6.2 Open the History panel for one profile's `output_brightness` sensor. Verify the curve over ~10 minutes shows numeric values graphed as a continuous line (proves `state_class=MEASUREMENT` is honored by the recorder). Repeat for `output_color_temp` and `sun_elevation` (the last should match `sun.sun.attributes.elevation` and range roughly -90° to +90° over a day). [R1, D4, D8]
+- [x] 6.3 Add a temporary `apexcharts-card` to a dashboard pointing at one profile's three sensors. Verify all three render as numeric series. [R1, D4]
+- [x] 6.4 Restart HA. Verify each sensor briefly shows `unknown`, then populates with a value within one curve interval (default 90 s). [R4]
+- [x] 6.5 Verify the existing master switch attributes (`brightness_pct`, `color_temp_kelvin`, and the synthetic `sun_position` in [-1, +1] — all from `self._settings`) are still present and unchanged on the switch entity's state — the sensors are additive, not a replacement. [polish, D2]
 
 ## 7. Validation gate
 
