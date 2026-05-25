@@ -236,3 +236,23 @@ def lerp(x: float, x1: float, x2: float, y1: float, y2: float) -> float:
 def clamp(value: float, minimum: float, maximum: float) -> float:
     """Clamp value between minimum and maximum."""
     return max(minimum, min(value, maximum))
+
+
+def lux_reduce(
+    curve_brightness: float,
+    target_lux: int,
+    current_lux: float,
+    min_brightness: int,
+) -> float | None:
+    """Apply reduce-only lux gate to curve brightness.
+
+    Returns adjusted brightness, or None if lights should turn off.
+    """
+    if current_lux <= 0 or target_lux <= 0:
+        return curve_brightness
+    if current_lux <= target_lux:
+        return curve_brightness
+    adjusted = curve_brightness * (target_lux / current_lux)
+    if adjusted < min_brightness:
+        return None
+    return adjusted

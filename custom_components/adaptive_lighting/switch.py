@@ -61,6 +61,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_component import async_update_entity
 from homeassistant.helpers.event import (
     EventStateChangedData,
+    async_track_state_change_event,
     async_track_time_interval,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -78,7 +79,7 @@ from .adaptation_utils import (
     has_effect_attribute,
     prepare_adaptation_data,
 )
-from .color_and_brightness import SunLightSettings
+from .color_and_brightness import SunLightSettings, lux_reduce
 from .const import (
     ADAPT_BRIGHTNESS_SWITCH,
     ADAPT_COLOR_SWITCH,
@@ -91,6 +92,7 @@ from .const import (
     CONF_INTERCEPT,
     CONF_INTERVAL,
     CONF_LIGHTS,
+    CONF_LUX_SENSOR,
     CONF_MAX_BRIGHTNESS,
     CONF_MAX_COLOR_TEMP,
     CONF_MIN_BRIGHTNESS,
@@ -102,6 +104,7 @@ from .const import (
     CONF_SKIP_REDUNDANT_COMMANDS,
     CONF_SUNRISE_ENTITY,
     CONF_SUNSET_ENTITY,
+    CONF_TARGET_LUX,
     CONF_TRANSITION,
     CONF_TURN_ON_LIGHTS,
     CONF_USE_DEFAULTS,
@@ -841,6 +844,13 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             self._multi_light_intercept = False
         self._sunrise_entity = data[CONF_SUNRISE_ENTITY]
         self._sunset_entity = data[CONF_SUNSET_ENTITY]
+        self._lux_sensor: str = data.get(CONF_LUX_SENSOR, "")
+        self._target_lux: int = data.get(CONF_TARGET_LUX, 0)
+        self._lux_turned_off: set[str] = getattr(self, "_lux_turned_off", set())
+        self._last_lux_factor: float = 1.0
+        self._remove_lux_listener: CALLBACK_TYPE | None = getattr(
+            self, "_remove_lux_listener", None
+        )
         self._expand_light_groups()
 
         # Snapshot the four range values for the fallback path; the
@@ -1000,6 +1010,9 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
     async def async_will_remove_from_hass(self) -> None:
         """Remove the listeners upon removing the component."""
         self._remove_listeners()
+        if self._remove_lux_listener is not None:
+            self._remove_lux_listener()
+            self._remove_lux_listener = None
 
     def _expand_light_groups(self, hass: HomeAssistant | None = None) -> None:
         hass = hass or self.hass
@@ -1016,6 +1029,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         assert not self.remove_listeners
 
         self._update_time_interval_listener()
+        self._setup_lux_sensor_listener()
         self._expand_light_groups()
 
     def _update_time_interval_listener(self) -> None:
@@ -1043,6 +1057,61 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             action=self._async_update_at_interval_action,
             interval=adaptation_interval,
         )
+
+    def _setup_lux_sensor_listener(self) -> None:
+        """Register a state listener on the lux sensor if configured."""
+        if self._remove_lux_listener is not None:
+            self._remove_lux_listener()
+            self._remove_lux_listener = None
+
+        if not self._lux_sensor or not self._target_lux:
+            return
+
+        @callback
+        def _lux_state_changed(event: Event[EventStateChangedData]) -> None:
+            new_state = event.data["new_state"]
+            if new_state is None or new_state.state in ("unavailable", "unknown"):
+                return
+            try:
+                current_lux = float(new_state.state)
+            except (TypeError, ValueError):
+                return
+            if self._target_lux <= 0 or current_lux <= 0:
+                return
+            new_factor = (
+                min(self._target_lux / current_lux, 1.0)
+                if current_lux > self._target_lux
+                else 1.0
+            )
+            old_factor = self._last_lux_factor
+            crossed_threshold = (old_factor >= 1.0) != (new_factor >= 1.0)
+            factor_delta = abs(new_factor - old_factor) * 100
+            if crossed_threshold or factor_delta > 5:
+                context = self.create_context("lux_change")
+                self.hass.async_create_task(
+                    self._update_attrs_and_maybe_adapt_lights(
+                        context=context, force=True,
+                    ),
+                )
+
+        self._remove_lux_listener = async_track_state_change_event(
+            self.hass,
+            [self._lux_sensor],
+            _lux_state_changed,
+        )
+
+    def _read_lux_sensor(self) -> float | None:
+        """Read the configured lux sensor's current numeric value."""
+        if not self._lux_sensor:
+            return None
+        state = self.hass.states.get(self._lux_sensor)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return None
+        try:
+            value = float(state.state)
+            return value if value > 0 else None
+        except (TypeError, ValueError):
+            return None
 
     def _call_on_remove_callbacks(self) -> None:
         """Call callbacks registered by async_on_remove."""
@@ -1185,6 +1254,39 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             t_sunrise,
             t_sunset,
         )
+
+        # Lux gate: reduce brightness when ambient light exceeds target.
+        current_lux = self._read_lux_sensor()
+        if (
+            current_lux is not None
+            and self._target_lux > 0
+            and current_lux > self._target_lux
+        ):
+            min_b = self._get_runtime_range("min_brightness")
+            adjusted = lux_reduce(
+                self._settings["brightness_pct"],
+                self._target_lux,
+                current_lux,
+                min_b,
+            )
+            if adjusted is None:
+                self._lux_turned_off.add(light)
+                self._last_lux_factor = 0.0
+                context = context or self.create_context("adapt_lights")
+                await self.hass.services.async_call(
+                    LIGHT_DOMAIN,
+                    SERVICE_TURN_OFF,
+                    {ATTR_ENTITY_ID: light, ATTR_TRANSITION: transition or 0},
+                    context=context,
+                )
+                return None
+            self._last_lux_factor = self._target_lux / current_lux
+            self._settings["brightness_pct"] = adjusted
+        else:
+            if current_lux is not None and self._target_lux > 0:
+                self._last_lux_factor = 1.0
+            if light in self._lux_turned_off:
+                self._lux_turned_off.discard(light)
 
         # Build service data.
         service_data: dict[str, Any] = {ATTR_ENTITY_ID: light}
@@ -1358,10 +1460,9 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
 
         Writes ``hass.data[DOMAIN][entry_id]["outputs"]`` from the
         just-populated ``self._settings`` plus the current ``sun.sun``
-        elevation, then fires a per-entry dispatcher signal so the three
+        elevation, then fires a per-entry dispatcher signal so the
         ``sensor.<profile>_*`` entities update their state on the same
-        tick rhythm as the switch itself. See
-        ``add-output-sensors/design.md`` decisions 2, 3, and 8.
+        tick rhythm as the switch itself.
         """
         sun_state = self.hass.states.get("sun.sun")
         sun_elevation = (
@@ -1369,11 +1470,27 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         )
         brightness = self._settings.get("brightness_pct")
         color_temp = self._settings.get("color_temp_kelvin")
+
+        current_lux = self._read_lux_sensor()
+        if current_lux is not None and self._target_lux > 0:
+            ambient_lux: float | None = current_lux
+            if current_lux > self._target_lux:
+                lux_reduction = round(
+                    min(self._target_lux / current_lux, 1.0) * 100,
+                )
+            else:
+                lux_reduction = 100
+        else:
+            ambient_lux = current_lux
+            lux_reduction = None
+
         entry_data = self.hass.data[DOMAIN].setdefault(self._config_entry.entry_id, {})
         entry_data["outputs"] = {
             "output_brightness": int(brightness) if brightness is not None else None,
             "output_color_temp": int(color_temp) if color_temp is not None else None,
             "sun_elevation": sun_elevation,
+            "ambient_lux": ambient_lux,
+            "lux_reduction": lux_reduction,
             "updated_at": dt_util.utcnow(),
         }
         async_dispatcher_send(
@@ -1415,6 +1532,29 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
 
         if lights is None:
             lights = self.lights
+
+        # Lux-off recovery: if lux dropped back below target, turn lights
+        # back on that we previously turned off due to ambient brightness.
+        if self._lux_turned_off and self._target_lux > 0:
+            current_lux = self._read_lux_sensor()
+            if current_lux is not None and current_lux <= self._target_lux:
+                recovering = [l for l in self._lux_turned_off if l in lights]
+                self._lux_turned_off -= set(recovering)
+                for light_id in recovering:
+                    _LOGGER.debug(
+                        "%s: Lux dropped below target, turning '%s' back on",
+                        self._name,
+                        light_id,
+                    )
+                    await self.hass.services.async_call(
+                        LIGHT_DOMAIN,
+                        SERVICE_TURN_ON,
+                        {
+                            ATTR_ENTITY_ID: light_id,
+                            ATTR_TRANSITION: self.initial_transition,
+                        },
+                        context=context,
+                    )
 
         on_lights = [light for light in lights if is_on(self.hass, light)]
 

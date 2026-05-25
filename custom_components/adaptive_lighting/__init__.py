@@ -14,6 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from .const import (
     _DOMAIN_SCHEMA,  # pyright: ignore[reportPrivateUsage]
     ATTR_ADAPTIVE_LIGHTING_MANAGER,
+    CONF_LUX_SENSOR,
     CONF_NAME,
     CONFIG_ENTRY_VERSION,
     DOMAIN,
@@ -96,6 +97,33 @@ def _remove_orphan_sleep_entities(
         registry.async_remove(entity_id)
 
 
+_LUX_CONDITIONAL_SUFFIXES = ("_ambient_lux", "_lux_reduction")
+
+
+def _remove_orphan_lux_sensors(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+) -> None:
+    """Remove lux output sensors when lux_sensor is no longer configured."""
+    has_lux = bool(
+        config_entry.options.get(CONF_LUX_SENSOR)
+        or config_entry.data.get(CONF_LUX_SENSOR)
+    )
+    if has_lux:
+        return
+    registry = er.async_get(hass)
+    for entry in list(registry.entities.values()):
+        if (
+            entry.config_entry_id == config_entry.entry_id
+            and any(entry.unique_id.endswith(s) for s in _LUX_CONDITIONAL_SUFFIXES)
+        ):
+            _LOGGER.info(
+                "Removing orphan lux sensor %s (lux_sensor no longer configured).",
+                entry.entity_id,
+            )
+            registry.async_remove(entry.entity_id)
+
+
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Reject older config-entry versions with a friendly recreate message.
 
@@ -121,6 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     with `OptionsFlowWithReload`, so we deliberately do NOT register one.
     """
     _remove_orphan_sleep_entities(hass, config_entry)
+    _remove_orphan_lux_sensors(hass, config_entry)
 
     data = hass.data.setdefault(DOMAIN, {})
 

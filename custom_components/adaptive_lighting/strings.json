@@ -66,6 +66,18 @@
               "sunset_entity": "Any sensor that returns the next sunset timestamp."
             }
           },
+          "ambient_lux": {
+            "name": "Ambient lux",
+            "description": "Save energy when daylight is bright enough. Your sensor currently reads: {current_lux}.",
+            "data": {
+              "lux_sensor": "Lux sensor",
+              "target_lux": "Target illuminance (lux)"
+            },
+            "data_description": {
+              "lux_sensor": "An illuminance sensor near these lights. Leave empty to use the sun curve alone.",
+              "target_lux": "Lights dim when ambient light exceeds this value. Below min brightness they turn off entirely."
+            }
+          },
           "light_control": {
             "name": "Light control",
             "description": "How this integration talks to your lights when you turn them on by hand or by voice.",
@@ -268,6 +280,12 @@
       },
       "sun_elevation": {
         "name": "Sun elevation"
+      },
+      "ambient_lux": {
+        "name": "Ambient lux"
+      },
+      "lux_reduction": {
+        "name": "Lux reduction"
       }
     }
   }

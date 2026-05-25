@@ -131,6 +131,18 @@ DOCS[CONF_INTERCEPT] = (
     "of waiting for the next scheduled update."
 )
 
+CONF_LUX_SENSOR, DEFAULT_LUX_SENSOR = "lux_sensor", ""
+DOCS[CONF_LUX_SENSOR] = (
+    "An illuminance sensor used to dim lights when ambient light exceeds the target. "
+    "Leave empty to use the sun curve alone."
+)
+
+CONF_TARGET_LUX, DEFAULT_TARGET_LUX = "target_lux", 0
+DOCS[CONF_TARGET_LUX] = (
+    "Desired illuminance in lux. When the sensor reads above this value, "
+    "lights dim proportionally. 0 disables lux-based dimming."
+)
+
 CONF_MULTI_LIGHT_INTERCEPT, DEFAULT_MULTI_LIGHT_INTERCEPT = (
     "multi_light_intercept",
     True,
@@ -220,6 +232,20 @@ OUTPUT_SENSORS: list[dict[str, Any]] = [
         "unit": "°",
         "icon": "mdi:weather-sunset",
     },
+    {
+        "key": "ambient_lux",
+        "name": "Ambient lux",
+        "unit": "lx",
+        "icon": "mdi:brightness-5",
+        "conditional": True,
+    },
+    {
+        "key": "lux_reduction",
+        "name": "Lux reduction",
+        "unit": "%",
+        "icon": "mdi:chart-line-variant",
+        "conditional": True,
+    },
 ]
 
 # Dispatcher signal used by the master switch to wake the output sensors
@@ -279,6 +305,8 @@ VALIDATION_TUPLES: list[tuple[str, Any, Any]] = [
     (CONF_INTERCEPT, DEFAULT_INTERCEPT, bool),
     (CONF_MULTI_LIGHT_INTERCEPT, DEFAULT_MULTI_LIGHT_INTERCEPT, bool),
     (CONF_INCLUDE_CONFIG_IN_ATTRIBUTES, DEFAULT_INCLUDE_CONFIG_IN_ATTRIBUTES, bool),
+    (CONF_LUX_SENSOR, DEFAULT_LUX_SENSOR, cv.string),
+    (CONF_TARGET_LUX, DEFAULT_TARGET_LUX, int_between(0, 10000)),
 ]
 
 

@@ -15,6 +15,7 @@ import pytest
 from custom_components.adaptive_lighting.color_and_brightness import (
     SunLightSettings,
     _tanh_day_curve,
+    lux_reduce,
 )
 
 HALF_WIDTH = 1800  # seconds — matches RAMP_HALF_WIDTH_SECONDS
@@ -162,3 +163,43 @@ class TestTanhDayCurveDirect:
             half_width=HALF_WIDTH,
         )
         assert v == 100
+
+
+class TestLuxReduce:
+    """Reduce-only lux gate: target/current ratio, floor at min_brightness."""
+
+    def test_above_target_reduces_brightness(self):
+        result = lux_reduce(85.0, 500, 700, 5)
+        assert result == pytest.approx(85.0 * 500 / 700, abs=0.1)
+
+    def test_below_target_passes_through(self):
+        assert lux_reduce(85.0, 500, 300, 5) == 85.0
+
+    def test_exactly_at_target_passes_through(self):
+        assert lux_reduce(85.0, 500, 500, 5) == 85.0
+
+    def test_below_min_brightness_returns_none(self):
+        assert lux_reduce(80.0, 500, 10000, 5) is None
+
+    def test_zero_current_lux_passes_through(self):
+        assert lux_reduce(85.0, 500, 0, 5) == 85.0
+
+    def test_negative_current_lux_passes_through(self):
+        assert lux_reduce(85.0, 500, -10, 5) == 85.0
+
+    def test_zero_target_lux_passes_through(self):
+        assert lux_reduce(85.0, 0, 500, 5) == 85.0
+
+    def test_exactly_at_min_brightness_keeps_on(self):
+        # 100 * (500/10000) = 5.0, which is NOT < 5 → stays on at 5.0
+        result = lux_reduce(100.0, 500, 10000, 5)
+        assert result == pytest.approx(5.0)
+
+    def test_boundary_just_above_min(self):
+        result = lux_reduce(100.0, 500, 9900, 5)
+        assert result is not None
+        assert result >= 5
+
+    def test_boundary_just_below_min(self):
+        result = lux_reduce(100.0, 500, 10100, 5)
+        assert result is None  # 100 * 500/10100 ≈ 4.95 < 5

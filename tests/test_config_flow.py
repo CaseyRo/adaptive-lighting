@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.adaptive_lighting.config_flow import (
     SECTION_ADVANCED,
+    SECTION_AMBIENT_LUX,
     SECTION_DAYTIME,
     SECTION_DIAGNOSTICS,
     SECTION_LIGHT_CONTROL,
@@ -30,6 +31,7 @@ from custom_components.adaptive_lighting.const import (
     CONF_INTERCEPT,
     CONF_INTERVAL,
     CONF_LIGHTS,
+    CONF_LUX_SENSOR,
     CONF_MAX_BRIGHTNESS,
     CONF_MAX_COLOR_TEMP,
     CONF_MIN_BRIGHTNESS,
@@ -41,6 +43,7 @@ from custom_components.adaptive_lighting.const import (
     CONF_SKIP_REDUNDANT_COMMANDS,
     CONF_SUNRISE_ENTITY,
     CONF_SUNSET_ENTITY,
+    CONF_TARGET_LUX,
     DEFAULT_NAME,
     DEFAULT_SUNRISE_ENTITY,
     DEFAULT_SUNSET_ENTITY,
@@ -51,6 +54,7 @@ EXPECTED_SECTIONS = (
     SECTION_TARGETS,
     SECTION_DAYTIME,
     SECTION_SUN,
+    SECTION_AMBIENT_LUX,
     SECTION_LIGHT_CONTROL,
     SECTION_ADVANCED,
     SECTION_DIAGNOSTICS,
@@ -66,6 +70,7 @@ EXPECTED_SECTION_FIELDS: dict[str, set[str]] = {
         CONF_PREFER_RGB_COLOR,
     },
     SECTION_SUN: {CONF_SUNRISE_ENTITY, CONF_SUNSET_ENTITY},
+    SECTION_AMBIENT_LUX: {CONF_LUX_SENSOR},
     SECTION_LIGHT_CONTROL: {CONF_INTERCEPT, CONF_MULTI_LIGHT_INTERCEPT},
     SECTION_ADVANCED: {
         CONF_INTERVAL,
@@ -93,9 +98,9 @@ def _section_inner_keys(schema_section) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_options_schema_has_all_six_sections_in_order() -> None:
-    """R1: the options form returns the six named sections in order."""
-    schema = _build_options_schema({}, show_send_split_delay=False)
+def test_options_schema_has_all_seven_sections_in_order() -> None:
+    """R1: the options form returns the seven named sections in order."""
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
     keys = [
         k.schema if hasattr(k, "schema") else k
         for k in schema.schema  # type: ignore[attr-defined]
@@ -107,7 +112,7 @@ def test_each_section_contains_only_its_specified_fields() -> None:
     """R1 scenario 2: every field appears in exactly one section, matching
     the layout table.
     """
-    schema = _build_options_schema({}, show_send_split_delay=True)
+    schema = _build_options_schema({}, show_send_split_delay=True, show_target_lux=False)
     for marker in schema.schema:  # type: ignore[attr-defined]
         section_id = marker.schema if hasattr(marker, "schema") else marker
         inner_fields = _section_inner_keys(schema.schema[marker])  # type: ignore[index]
@@ -127,7 +132,7 @@ def test_each_section_contains_only_its_specified_fields() -> None:
 
 def test_send_split_delay_hidden_when_driver_false() -> None:
     """R2: send_split_delay is absent when separate_turn_on_commands=False."""
-    schema = _build_options_schema({}, show_send_split_delay=False)
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
     advanced_marker = next(
         m
         for m in schema.schema  # type: ignore[attr-defined]
@@ -139,7 +144,7 @@ def test_send_split_delay_hidden_when_driver_false() -> None:
 
 def test_send_split_delay_visible_when_driver_true() -> None:
     """R2: send_split_delay appears when separate_turn_on_commands=True."""
-    schema = _build_options_schema({}, show_send_split_delay=True)
+    schema = _build_options_schema({}, show_send_split_delay=True, show_target_lux=False)
     advanced_marker = next(
         m
         for m in schema.schema  # type: ignore[attr-defined]
@@ -156,7 +161,7 @@ def test_send_split_delay_visible_when_driver_true() -> None:
 
 def test_default_sunrise_and_sunset_entities() -> None:
     """R3: default entities point at the built-in sun.sun sensors."""
-    schema = _build_options_schema({}, show_send_split_delay=False)
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
     sun_marker = next(
         m
         for m in schema.schema  # type: ignore[attr-defined]
@@ -184,7 +189,7 @@ def test_sun_entity_selectors_are_strict_timestamp_sensors() -> None:
     """R3 + D14: both sun-event entity selectors filter by domain=sensor and
     device_class=timestamp.
     """
-    schema = _build_options_schema({}, show_send_split_delay=False)
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
     sun_marker = next(
         m
         for m in schema.schema  # type: ignore[attr-defined]
@@ -213,7 +218,7 @@ def test_sun_entity_selectors_are_strict_timestamp_sensors() -> None:
 
 def test_brightness_uses_slider_number_selector() -> None:
     """R5: brightness fields are NumberSelectors with slider mode, 1–100 %, step 1."""
-    schema = _build_options_schema({}, show_send_split_delay=False)
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
     daytime_marker = next(
         m
         for m in schema.schema  # type: ignore[attr-defined]
@@ -234,7 +239,7 @@ def test_brightness_uses_slider_number_selector() -> None:
 
 def test_color_temp_uses_box_number_selector() -> None:
     """R5: color-temp fields are NumberSelectors, 1000–10000 K, step 100."""
-    schema = _build_options_schema({}, show_send_split_delay=False)
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
     daytime_marker = next(
         m
         for m in schema.schema  # type: ignore[attr-defined]
@@ -254,7 +259,7 @@ def test_color_temp_uses_box_number_selector() -> None:
 
 def test_booleans_use_boolean_selector() -> None:
     """R5: every boolean field renders as a BooleanSelector."""
-    schema = _build_options_schema({}, show_send_split_delay=True)
+    schema = _build_options_schema({}, show_send_split_delay=True, show_target_lux=False)
     boolean_fields = {
         CONF_PREFER_RGB_COLOR,
         CONF_INTERCEPT,
@@ -329,9 +334,109 @@ async def test_options_flow_renders_sectioned_schema(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
-    # The form's data_schema contains the six section keys.
+    # The form's data_schema contains the seven section keys.
     schema_keys = [
         (k.schema if hasattr(k, "schema") else k)
         for k in result["data_schema"].schema  # type: ignore[union-attr,attr-defined]
     ]
     assert tuple(schema_keys) == EXPECTED_SECTIONS
+
+
+# ---------------------------------------------------------------------------
+# Lux: conditional target_lux visibility
+# ---------------------------------------------------------------------------
+
+
+def test_target_lux_hidden_when_no_sensor() -> None:
+    """target_lux should not appear when lux_sensor is empty."""
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
+    lux_marker = next(
+        m
+        for m in schema.schema
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_AMBIENT_LUX
+    )
+    lux_fields = _section_inner_keys(schema.schema[lux_marker])
+    assert CONF_LUX_SENSOR in lux_fields
+    assert CONF_TARGET_LUX not in lux_fields
+
+
+def test_target_lux_visible_when_sensor_set() -> None:
+    """target_lux should appear when lux_sensor is populated."""
+    schema = _build_options_schema(
+        {CONF_LUX_SENSOR: "sensor.office_lux"},
+        show_send_split_delay=False,
+        show_target_lux=True,
+    )
+    lux_marker = next(
+        m
+        for m in schema.schema
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_AMBIENT_LUX
+    )
+    lux_fields = _section_inner_keys(schema.schema[lux_marker])
+    assert CONF_LUX_SENSOR in lux_fields
+    assert CONF_TARGET_LUX in lux_fields
+
+
+def test_lux_sensor_selector_filters_to_illuminance() -> None:
+    """lux_sensor entity selector should filter to device_class=illuminance."""
+    schema = _build_options_schema({}, show_send_split_delay=False, show_target_lux=False)
+    lux_marker = next(
+        m
+        for m in schema.schema
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_AMBIENT_LUX
+    )
+    lux_inner = schema.schema[lux_marker].schema.schema
+    for k, v in lux_inner.items():
+        field_name = k.schema if hasattr(k, "schema") else k
+        if field_name == CONF_LUX_SENSOR:
+            assert isinstance(v, EntitySelector)
+            cfg = v.config
+            domain = cfg.get("domain")
+            device_class = cfg.get("device_class")
+            assert "sensor" in (domain if isinstance(domain, list) else [domain])
+            assert "illuminance" in (
+                device_class if isinstance(device_class, list) else [device_class]
+            )
+
+
+def test_target_lux_selector_uses_box_mode() -> None:
+    """target_lux should be a NumberSelector in BOX mode, range 1-10000, unit lx."""
+    schema = _build_options_schema(
+        {CONF_LUX_SENSOR: "sensor.office_lux"},
+        show_send_split_delay=False,
+        show_target_lux=True,
+    )
+    lux_marker = next(
+        m
+        for m in schema.schema
+        if (m.schema if hasattr(m, "schema") else m) == SECTION_AMBIENT_LUX
+    )
+    lux_inner = schema.schema[lux_marker].schema.schema
+    for k, v in lux_inner.items():
+        field_name = k.schema if hasattr(k, "schema") else k
+        if field_name == CONF_TARGET_LUX:
+            assert isinstance(v, NumberSelector)
+            cfg = v.config
+            assert cfg["min"] == 1
+            assert cfg["max"] == 10000
+            assert cfg["step"] == 10
+            assert cfg["unit_of_measurement"] == "lx"
+            assert cfg["mode"] == NumberSelectorMode.BOX
+
+
+async def test_options_flow_shows_lux_reading_placeholder(hass) -> None:
+    """The options flow should include description_placeholders with current_lux."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=DEFAULT_NAME,
+        data={CONF_NAME: DEFAULT_NAME},
+        options={},
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert "description_placeholders" in result
+    assert "current_lux" in result["description_placeholders"]

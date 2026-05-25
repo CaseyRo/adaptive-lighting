@@ -184,6 +184,8 @@ async def test_curve_tick_publishes_outputs(hass) -> None:
         "output_brightness",
         "output_color_temp",
         "sun_elevation",
+        "ambient_lux",
+        "lux_reduction",
         "updated_at",
     }
     assert outputs["output_brightness"] == 72
@@ -312,6 +314,8 @@ async def test_friendly_names_compose_correctly(hass) -> None:
     entry = await _setup_entry(hass)
     names = {}
     for row in OUTPUT_SENSORS:
+        if row.get("conditional"):
+            continue
         key = row["key"]
         eid = _resolve_entity_id(hass, entry, key)
         names[key] = hass.states.get(eid).attributes["friendly_name"]

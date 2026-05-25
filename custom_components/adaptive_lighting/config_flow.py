@@ -40,6 +40,7 @@ from .const import (
     CONF_INTERCEPT,
     CONF_INTERVAL,
     CONF_LIGHTS,
+    CONF_LUX_SENSOR,
     CONF_MAX_BRIGHTNESS,
     CONF_MAX_COLOR_TEMP,
     CONF_MIN_BRIGHTNESS,
@@ -51,11 +52,13 @@ from .const import (
     CONF_SKIP_REDUNDANT_COMMANDS,
     CONF_SUNRISE_ENTITY,
     CONF_SUNSET_ENTITY,
+    CONF_TARGET_LUX,
     CONF_TRANSITION,
     CONFIG_ENTRY_VERSION,
     DEFAULT_INITIAL_TRANSITION,
     DEFAULT_INTERCEPT,
     DEFAULT_INTERVAL,
+    DEFAULT_LUX_SENSOR,
     DEFAULT_MAX_BRIGHTNESS,
     DEFAULT_MAX_COLOR_TEMP,
     DEFAULT_MIN_BRIGHTNESS,
@@ -67,6 +70,7 @@ from .const import (
     DEFAULT_SKIP_REDUNDANT_COMMANDS,
     DEFAULT_SUNRISE_ENTITY,
     DEFAULT_SUNSET_ENTITY,
+    DEFAULT_TARGET_LUX,
     DEFAULT_TRANSITION,
     DOMAIN,
     RANGE_ENTITIES,
@@ -79,6 +83,7 @@ _LOGGER = logging.getLogger(__name__)
 SECTION_TARGETS = "targets"
 SECTION_DAYTIME = "daytime_curve"
 SECTION_SUN = "sun_schedule"
+SECTION_AMBIENT_LUX = "ambient_lux"
 SECTION_LIGHT_CONTROL = "light_control"
 SECTION_ADVANCED = "advanced"
 SECTION_DIAGNOSTICS = "diagnostics"
@@ -145,6 +150,24 @@ def _sun_event_selector() -> EntitySelector:
     )
 
 
+def _lux_sensor_selector() -> EntitySelector:
+    return EntitySelector(
+        EntitySelectorConfig(domain="sensor", device_class="illuminance"),
+    )
+
+
+def _target_lux_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=1,
+            max=10000,
+            step=10,
+            unit_of_measurement="lx",
+            mode=NumberSelectorMode.BOX,
+        ),
+    )
+
+
 # --- Schema builder ---
 
 
@@ -152,6 +175,7 @@ def _build_options_schema(
     current: dict[str, Any],
     *,
     show_send_split_delay: bool,
+    show_target_lux: bool,
 ) -> vol.Schema:
     """Build the sectioned options schema from the entry's current values."""
     targets_section = section(
@@ -211,6 +235,25 @@ def _build_options_schema(
             },
         ),
         {"collapsed": False},
+    )
+
+    ambient_lux_schema: dict[Any, Any] = {
+        vol.Optional(
+            CONF_LUX_SENSOR,
+            default=current.get(CONF_LUX_SENSOR, DEFAULT_LUX_SENSOR),
+        ): _lux_sensor_selector(),
+    }
+    if show_target_lux:
+        ambient_lux_schema[
+            vol.Optional(
+                CONF_TARGET_LUX,
+                default=current.get(CONF_TARGET_LUX, DEFAULT_TARGET_LUX),
+            )
+        ] = _target_lux_selector()
+
+    ambient_lux_section = section(
+        vol.Schema(ambient_lux_schema),
+        {"collapsed": True},
     )
 
     light_control_section = section(
@@ -296,6 +339,7 @@ def _build_options_schema(
             vol.Required(SECTION_TARGETS): targets_section,
             vol.Required(SECTION_DAYTIME): daytime_section,
             vol.Required(SECTION_SUN): sun_section,
+            vol.Required(SECTION_AMBIENT_LUX): ambient_lux_section,
             vol.Required(SECTION_LIGHT_CONTROL): light_control_section,
             vol.Required(SECTION_ADVANCED): advanced_section,
             vol.Required(SECTION_DIAGNOSTICS): diagnostics_section,
@@ -422,6 +466,16 @@ class OptionsFlowHandler(OptionsFlowWithReload):
             if not errors:
                 return self.async_create_entry(title="", data=flat)
 
+        lux_sensor_id = current.get(CONF_LUX_SENSOR, DEFAULT_LUX_SENSOR)
+        lux_reading = "—"
+        if lux_sensor_id:
+            lux_state = self.hass.states.get(lux_sensor_id)
+            if lux_state and lux_state.state not in ("unavailable", "unknown"):
+                try:
+                    lux_reading = f"{float(lux_state.state):.0f} lx"
+                except (TypeError, ValueError):
+                    pass
+
         return self.async_show_form(
             step_id="init",
             data_schema=_build_options_schema(
@@ -432,6 +486,8 @@ class OptionsFlowHandler(OptionsFlowWithReload):
                         DEFAULT_SEPARATE_TURN_ON_COMMANDS,
                     ),
                 ),
+                show_target_lux=bool(lux_sensor_id),
             ),
+            description_placeholders={"current_lux": lux_reading},
             errors=errors,
         )

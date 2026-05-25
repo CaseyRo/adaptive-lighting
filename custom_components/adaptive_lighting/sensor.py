@@ -24,7 +24,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, OUTPUT_SENSORS, SIGNAL_OUTPUTS_UPDATED
+from .const import CONF_LUX_SENSOR, DOMAIN, OUTPUT_SENSORS, SIGNAL_OUTPUTS_UPDATED
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -39,7 +39,11 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create the three output sensors for this config entry."""
+    """Create the output sensors for this config entry."""
+    has_lux = bool(
+        config_entry.options.get(CONF_LUX_SENSOR)
+        or config_entry.data.get(CONF_LUX_SENSOR)
+    )
     entities = [
         AdaptiveOutputSensor(
             hass=hass,
@@ -50,6 +54,7 @@ async def async_setup_entry(
             icon=row["icon"],
         )
         for row in OUTPUT_SENSORS
+        if not row.get("conditional") or has_lux
     ]
     async_add_entities(entities)
 
