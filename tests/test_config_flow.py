@@ -440,3 +440,114 @@ async def test_options_flow_shows_lux_reading_placeholder(hass) -> None:
     assert result["type"] is FlowResultType.FORM
     assert "description_placeholders" in result
     assert "current_lux" in result["description_placeholders"]
+
+
+# ---------------------------------------------------------------------------
+# Same-session re-render of conditional fields (options-flow conditionals)
+# ---------------------------------------------------------------------------
+
+
+def _full_section_payload() -> dict:
+    """A schema-valid sectioned options submission (conditional fields off)."""
+    return {
+        SECTION_TARGETS: {CONF_LIGHTS: []},
+        SECTION_DAYTIME: {
+            CONF_MIN_BRIGHTNESS: 5,
+            CONF_MAX_BRIGHTNESS: 100,
+            CONF_MIN_COLOR_TEMP: 2000,
+            CONF_MAX_COLOR_TEMP: 5500,
+            CONF_PREFER_RGB_COLOR: False,
+        },
+        SECTION_SUN: {
+            CONF_SUNRISE_ENTITY: DEFAULT_SUNRISE_ENTITY,
+            CONF_SUNSET_ENTITY: DEFAULT_SUNSET_ENTITY,
+        },
+        # Omit lux_sensor entirely: an EntitySelector rejects an explicit "",
+        # so the empty case is expressed by absence (the vol.Optional default).
+        SECTION_AMBIENT_LUX: {},
+        SECTION_LIGHT_CONTROL: {CONF_INTERCEPT: True, CONF_MULTI_LIGHT_INTERCEPT: False},
+        SECTION_ADVANCED: {
+            CONF_INTERVAL: 90,
+            "transition": 45,
+            "initial_transition": 1,
+            "adapt_delay": 0,
+            CONF_SEPARATE_TURN_ON_COMMANDS: False,
+            CONF_SKIP_REDUNDANT_COMMANDS: True,
+        },
+        SECTION_DIAGNOSTICS: {CONF_INCLUDE_CONFIG_IN_ATTRIBUTES: False},
+    }
+
+
+def _result_section_fields(result, section_name: str) -> set[str]:
+    """Extract a section's field names from a rendered flow result schema."""
+    schema = result["data_schema"].schema
+    marker = next(
+        m for m in schema if (m.schema if hasattr(m, "schema") else m) == section_name
+    )
+    return _section_inner_keys(schema[marker])
+
+
+async def _open_options(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=DEFAULT_NAME,
+        data={CONF_NAME: DEFAULT_NAME},
+        options={},
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    return await hass.config_entries.options.async_init(entry.entry_id)
+
+
+async def test_options_flow_saves_when_no_conditional_pending(hass) -> None:
+    """Regression: a submission with no driver enabled still saves directly."""
+    result = await _open_options(hass)
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input=_full_section_payload(),
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_target_lux_revealed_same_session_when_sensor_selected(hass) -> None:
+    """options-flow conditionals: picking a lux sensor re-renders the form with
+    target_lux present, in the SAME session (no save-and-reopen round-trip).
+    """
+    result = await _open_options(hass)
+    assert CONF_TARGET_LUX not in _result_section_fields(result, SECTION_AMBIENT_LUX)
+
+    payload = _full_section_payload()
+    payload[SECTION_AMBIENT_LUX] = {CONF_LUX_SENSOR: "sensor.office_lux"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input=payload,
+    )
+    # Must re-render rather than save, and now expose target_lux.
+    assert result["type"] is FlowResultType.FORM
+    assert CONF_TARGET_LUX in _result_section_fields(result, SECTION_AMBIENT_LUX)
+
+
+async def test_target_lux_saved_on_second_submit_after_reveal(hass) -> None:
+    """After the reveal re-render, submitting with target_lux set saves."""
+    result = await _open_options(hass)
+    payload = _full_section_payload()
+    payload[SECTION_AMBIENT_LUX] = {CONF_LUX_SENSOR: "sensor.office_lux"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input=payload,
+    )
+    assert result["type"] is FlowResultType.FORM  # revealed
+
+    payload[SECTION_AMBIENT_LUX] = {
+        CONF_LUX_SENSOR: "sensor.office_lux",
+        CONF_TARGET_LUX: 500,
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input=payload,
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_LUX_SENSOR] == "sensor.office_lux"
+    assert result["data"][CONF_TARGET_LUX] == 500

@@ -237,10 +237,16 @@ def _build_options_schema(
         {"collapsed": False},
     )
 
+    # An illuminance EntitySelector rejects an empty string, so we must NOT
+    # hand it `default=""`. When no sensor is configured, omit the default
+    # entirely (vol.UNDEFINED) so the field is simply absent on submit and
+    # treated as "unconfigured" — otherwise the form cannot be saved without
+    # selecting a lux sensor.
+    lux_default = current.get(CONF_LUX_SENSOR) or vol.UNDEFINED
     ambient_lux_schema: dict[Any, Any] = {
         vol.Optional(
             CONF_LUX_SENSOR,
-            default=current.get(CONF_LUX_SENSOR, DEFAULT_LUX_SENSOR),
+            default=lux_default,
         ): _lux_sensor_selector(),
     }
     if show_target_lux:
@@ -362,6 +368,21 @@ def _flatten_sections(sectioned: dict[str, Any]) -> dict[str, Any]:
     return flat
 
 
+def _has_pending_reveal(flat: dict[str, Any]) -> bool:
+    """Return True when a just-toggled driver hides a dependent field.
+
+    HA's section() forms are not reactive, so when a user enables a driver
+    in this submission its dependent field was absent from the rendered
+    schema (and therefore from ``flat``). The caller re-shows the rebuilt
+    form so the dependent field appears in the same session, per the
+    options-flow conditional-visibility spec.
+    """
+    return (bool(flat.get(CONF_LUX_SENSOR)) and CONF_TARGET_LUX not in flat) or (
+        bool(flat.get(CONF_SEPARATE_TURN_ON_COMMANDS))
+        and CONF_SEND_SPLIT_DELAY not in flat
+    )
+
+
 class AdaptiveLightingConfigFlow(HAConfigFlow, domain=DOMAIN):
     """Handle a config flow for the CDiT Adaptive Lighting fork."""
 
@@ -422,6 +443,26 @@ class OptionsFlowHandler(OptionsFlowWithReload):
     translation-keyed message instead of presenting an editable form.
     """
 
+    def _overlay_range_values(self, current: dict[str, Any]) -> None:
+        """Overlay live runtime-range number entity values onto ``current``.
+
+        Keeps the dialog's brightness/color-temp defaults in sync with what
+        the four ``number`` entities are actually running (spec R6, D4).
+        """
+        registry = er.async_get(self.hass)
+        for row in RANGE_ENTITIES:
+            unique_id = f"{self.config_entry.entry_id}_{row['field_key']}"
+            entity_id = registry.async_get_entity_id("number", DOMAIN, unique_id)
+            if entity_id is None:
+                continue
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in (None, "unavailable", "unknown"):
+                continue
+            try:
+                current[row["conf_key"]] = int(float(state.state))
+            except (TypeError, ValueError):
+                continue
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         conf = self.config_entry
         if conf.source == SOURCE_IMPORT:
@@ -435,19 +476,7 @@ class OptionsFlowHandler(OptionsFlowWithReload):
         # so the dialog matches what the user's lights are actually running
         # (spec R6, design D4). Other ~14 fields keep their `entry.options`
         # values from above.
-        registry = er.async_get(self.hass)
-        for row in RANGE_ENTITIES:
-            unique_id = f"{conf.entry_id}_{row['field_key']}"
-            entity_id = registry.async_get_entity_id("number", DOMAIN, unique_id)
-            if entity_id is None:
-                continue
-            state = self.hass.states.get(entity_id)
-            if state is None or state.state in (None, "unavailable", "unknown"):
-                continue
-            try:
-                current[row["conf_key"]] = int(float(state.state))
-            except (TypeError, ValueError):
-                continue
+        self._overlay_range_values(current)
 
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -464,7 +493,15 @@ class OptionsFlowHandler(OptionsFlowWithReload):
                     )
                     break
             if not errors:
-                return self.async_create_entry(title="", data=flat)
+                if _has_pending_reveal(flat):
+                    # Overlay the just-submitted values so the re-rendered
+                    # form keeps the user's edits and recomputes conditional
+                    # visibility from the new driver values below, instead of
+                    # saving — the dependent field then appears in the same
+                    # session (no save-and-reopen round-trip).
+                    current.update(flat)
+                else:
+                    return self.async_create_entry(title="", data=flat)
 
         lux_sensor_id = current.get(CONF_LUX_SENSOR, DEFAULT_LUX_SENSOR)
         lux_reading = "—"
