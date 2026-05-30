@@ -175,30 +175,28 @@ The `ambient_lux` output sensor SHALL read the configured `lux_sensor` entity's 
 - **THEN** `outputs["ambient_lux"]` SHALL be `None`
 - **AND** the `ambient_lux` sensor entity state SHALL be `unknown`
 
-### Requirement: Lux reduction sensor exposes the applied factor as a percentage
+### Requirement: Lux reduction sensor exposes the applied reduction as a percentage
 
-The `lux_reduction` output sensor SHALL publish `factor × 100` to `hass.data[DOMAIN][entry.entry_id]["outputs"]["lux_reduction"]`, where `factor` is the value computed by the lux gate. A value of `100` means no reduction (curve passes through); `50` means brightness was halved. When the lux gate is inactive (sensor below target or unavailable), the value SHALL be `100`.
+The `lux_reduction` output sensor SHALL publish the brightness reduction the lux gate is applying, as a percentage, to `hass.data[DOMAIN][entry.entry_id]["outputs"]["lux_reduction"]`. The value SHALL be `100 − round(factor × 100)`, where `factor` is the retained brightness factor computed by the lux gate (`target_lux / current_lux`, capped at `1.0`). A value of `0` means no reduction (curve passes through); `50` means brightness was halved; values approaching `100` mean the lights are almost fully cut. When ambient lux is at or below target, the value SHALL be `0`. When the lux gate is inactive (no sensor configured, sensor unavailable, or `target_lux` is 0), the value SHALL be `None` (the sensor renders `unknown`).
 
-When the lights were turned off due to lux reduction (factor drove brightness below `min_brightness`), the value SHALL be `0`.
-
-#### Scenario: Lux reduction shows the applied factor
+#### Scenario: Lux reduction shows the applied reduction
 
 - **GIVEN** `target_lux` is 500 and `lux_sensor` reads 700
 - **WHEN** a curve evaluation tick completes
-- **THEN** `outputs["lux_reduction"]` SHALL be `71` (rounded from 71.4)
-- **AND** the `lux_reduction` sensor entity state SHALL be `"71"`
+- **THEN** `outputs["lux_reduction"]` SHALL be `29` (100 − 71, the retained 71.4% rounded)
+- **AND** the `lux_reduction` sensor entity state SHALL be `"29"`
 
-#### Scenario: No reduction shows 100%
+#### Scenario: No reduction shows 0%
 
 - **GIVEN** `target_lux` is 500 and `lux_sensor` reads 300
 - **WHEN** a curve evaluation tick completes
-- **THEN** `outputs["lux_reduction"]` SHALL be `100`
-
-#### Scenario: Lights-off due to lux shows 0%
-
-- **GIVEN** the lux gate drove brightness below `min_brightness`
-- **WHEN** a curve evaluation tick completes
 - **THEN** `outputs["lux_reduction"]` SHALL be `0`
+
+#### Scenario: Gate inactive shows unknown
+
+- **GIVEN** no `lux_sensor` is configured (or it is unavailable, or `target_lux` is 0)
+- **WHEN** a curve evaluation tick completes
+- **THEN** `outputs["lux_reduction"]` SHALL be `None`
 
 ### Requirement: Lux output sensors follow the same dispatcher pattern as existing sensors
 

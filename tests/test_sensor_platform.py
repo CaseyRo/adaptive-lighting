@@ -20,6 +20,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.adaptive_lighting import sensor as sensor_module
 from custom_components.adaptive_lighting.const import (
+    CONF_LUX_SENSOR,
+    CONF_TARGET_LUX,
     CONFIG_ENTRY_VERSION,
     DOMAIN,
     OUTPUT_SENSORS,
@@ -192,6 +194,32 @@ async def test_curve_tick_publishes_outputs(hass) -> None:
     assert outputs["output_color_temp"] == 3240
     assert outputs["sun_elevation"] == 18.0
     assert outputs["updated_at"] >= before
+
+
+async def test_lux_reduction_reports_reduction_not_retained_factor(hass) -> None:
+    """lux_reduction is the percentage *reduced* (0 = none), not the kept factor."""
+    entry = await _setup_entry(
+        hass,
+        options={CONF_LUX_SENSOR: "sensor.test_lux", CONF_TARGET_LUX: 500},
+    )
+    al_switch = hass.data[DOMAIN][entry.entry_id]["switch"]
+    al_switch._settings.update({"brightness_pct": 80, "color_temp_kelvin": 3000})
+    hass.states.async_set("sun.sun", "above_horizon", {"elevation": 10.0})
+
+    # Above target -> dimming. factor = 500/700 = 0.714 -> reduction = 29 %.
+    hass.states.async_set("sensor.test_lux", "700")
+    al_switch._publish_outputs_and_wake_sensors()
+    assert hass.data[DOMAIN][entry.entry_id]["outputs"]["lux_reduction"] == 29
+
+    # At/below target -> no reduction -> 0 % (the at-rest value).
+    hass.states.async_set("sensor.test_lux", "300")
+    al_switch._publish_outputs_and_wake_sensors()
+    assert hass.data[DOMAIN][entry.entry_id]["outputs"]["lux_reduction"] == 0
+
+    # No usable reading -> gate inactive -> None (sensor renders unknown).
+    hass.states.async_set("sensor.test_lux", "unavailable")
+    al_switch._publish_outputs_and_wake_sensors()
+    assert hass.data[DOMAIN][entry.entry_id]["outputs"]["lux_reduction"] is None
 
 
 # ---------------------------------------------------------------------------

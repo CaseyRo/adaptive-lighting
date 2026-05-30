@@ -1475,11 +1475,12 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         if current_lux is not None and self._target_lux > 0:
             ambient_lux: float | None = current_lux
             if current_lux > self._target_lux:
-                lux_reduction = round(
-                    min(self._target_lux / current_lux, 1.0) * 100,
-                )
+                factor = min(self._target_lux / current_lux, 1.0)
+                # Report the *reduction*, not the retained factor: 0 % means
+                # no dimming (curve passes through), 100 % means fully cut.
+                lux_reduction = 100 - round(factor * 100)
             else:
-                lux_reduction = 100
+                lux_reduction = 0
         else:
             ambient_lux = current_lux
             lux_reduction = None
