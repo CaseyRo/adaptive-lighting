@@ -1,5 +1,6 @@
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/github/v/release/basnijholt/adaptive-lighting?style=for-the-badge)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![Version](https://img.shields.io/github/v/release/CaseyRo/adaptive-lighting?include_prereleases&style=for-the-badge)](https://github.com/CaseyRo/adaptive-lighting/releases)
+[![Upstream](https://img.shields.io/badge/fork_of-basnijholt%2Fadaptive--lighting-blue?style=for-the-badge)](https://github.com/basnijholt/adaptive-lighting)
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
 [![All Contributors](https://img.shields.io/badge/all_contributors-134-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
