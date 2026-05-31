@@ -169,6 +169,7 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
     {
         "field_key": "min_brightness",
         "conf_key": CONF_MIN_BRIGHTNESS,
+        "default": DEFAULT_MIN_BRIGHTNESS,
         "name": "Min brightness",
         "native_min": 1,
         "native_max": 100,
@@ -179,6 +180,7 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
     {
         "field_key": "max_brightness",
         "conf_key": CONF_MAX_BRIGHTNESS,
+        "default": DEFAULT_MAX_BRIGHTNESS,
         "name": "Max brightness",
         "native_min": 1,
         "native_max": 100,
@@ -189,6 +191,7 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
     {
         "field_key": "min_color_temp",
         "conf_key": CONF_MIN_COLOR_TEMP,
+        "default": DEFAULT_MIN_COLOR_TEMP,
         "name": "Min color temp",
         "native_min": 1000,
         "native_max": 10000,
@@ -199,6 +202,7 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
     {
         "field_key": "max_color_temp",
         "conf_key": CONF_MAX_COLOR_TEMP,
+        "default": DEFAULT_MAX_COLOR_TEMP,
         "name": "Max color temp",
         "native_min": 1000,
         "native_max": 10000,

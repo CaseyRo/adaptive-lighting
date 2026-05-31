@@ -234,7 +234,7 @@ def _build_options_schema(
                 ): _sun_event_selector(),
             },
         ),
-        {"collapsed": False},
+        {"collapsed": True},
     )
 
     # An illuminance EntitySelector rejects an empty string, so we must NOT
@@ -278,7 +278,7 @@ def _build_options_schema(
                 ): BooleanSelector(),
             },
         ),
-        {"collapsed": False},
+        {"collapsed": True},
     )
 
     advanced_schema: dict[Any, Any] = {

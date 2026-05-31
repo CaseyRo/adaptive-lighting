@@ -25,6 +25,10 @@ from custom_components.adaptive_lighting.const import (
     CONF_MIN_BRIGHTNESS,
     CONF_MIN_COLOR_TEMP,
     CONFIG_ENTRY_VERSION,
+    DEFAULT_MAX_BRIGHTNESS,
+    DEFAULT_MAX_COLOR_TEMP,
+    DEFAULT_MIN_BRIGHTNESS,
+    DEFAULT_MIN_COLOR_TEMP,
     DOMAIN,
 )
 
@@ -124,6 +128,38 @@ async def test_number_entity_attributes(hass, field_key, expected) -> None:
     assert attrs["step"] == expected["step"]
     assert attrs["unit_of_measurement"] == expected["unit"]
     assert attrs["mode"] == NumberMode.SLIDER
+
+
+# ---------------------------------------------------------------------------
+# 7.4b — Fresh profile (only a name) seeds sensible DEFAULT_*, not native_min
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("field_key", "expected_default"),
+    [
+        ("min_brightness", DEFAULT_MIN_BRIGHTNESS),
+        ("max_brightness", DEFAULT_MAX_BRIGHTNESS),
+        ("min_color_temp", DEFAULT_MIN_COLOR_TEMP),
+        ("max_color_temp", DEFAULT_MAX_COLOR_TEMP),
+    ],
+)
+async def test_new_profile_seeds_sensible_defaults(
+    hass,
+    field_key,
+    expected_default,
+) -> None:
+    """A profile created with only a name must come up at DEFAULT_*.
+
+    Regression: the seed previously fell back to the slider's native_min,
+    so a brand-new group ran at max_brightness=1% and a collapsed
+    1000-1000K color-temp range until the options dialog was saved once.
+    """
+    entry = await _setup_entry(hass)  # data={name}, options={}
+    eid = _resolve_entity_id(hass, entry, field_key)
+    state = hass.states.get(eid)
+    assert state is not None
+    assert float(state.state) == float(expected_default)
 
 
 # ---------------------------------------------------------------------------

@@ -49,6 +49,7 @@ async def async_setup_entry(
             entry=config_entry,
             field_key=row["field_key"],
             conf_key=row["conf_key"],
+            default=row["default"],
             display_name=row["name"],
             native_min=row["native_min"],
             native_max=row["native_max"],
@@ -74,6 +75,7 @@ class AdaptiveRangeNumber(RestoreNumber):
         entry: ConfigEntry,
         field_key: str,
         conf_key: str,
+        default: float,
         display_name: str,
         native_min: float,
         native_max: float,
@@ -85,6 +87,7 @@ class AdaptiveRangeNumber(RestoreNumber):
         self._entry = entry
         self._field_key = field_key
         self._conf_key = conf_key
+        self._default = default
         self._attr_name = display_name
         self._attr_translation_key = field_key
         self._attr_unique_id = f"{entry.entry_id}_{field_key}"
@@ -108,10 +111,17 @@ class AdaptiveRangeNumber(RestoreNumber):
         )
 
     def _options_value(self) -> float:
-        """Read the seed value from entry.options (typed cast)."""
+        """Read the seed value from entry.options (typed cast).
+
+        On a freshly-created profile neither ``entry.options`` nor
+        ``entry.data`` carries the range keys (setup only stores the name),
+        so fall back to the field's sensible ``DEFAULT_*`` rather than the
+        slider's ``native_min`` — otherwise a new group would come up at
+        max_brightness=1% and a 1000-1000K color-temp range.
+        """
         raw = self._entry.options.get(self._conf_key)
         if raw is None:
-            raw = self._entry.data.get(self._conf_key, self._attr_native_min_value)
+            raw = self._entry.data.get(self._conf_key, self._default)
         return float(raw)
 
     async def async_added_to_hass(self) -> None:
