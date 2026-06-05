@@ -9,5 +9,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/CaseyRo/adaptive-lighting/issues",
   "requirements": ["ulid-transform"],
-  "version": "2.3.1-cdit.1"
+  "version": "2.4.0-cdit.1"
 }
