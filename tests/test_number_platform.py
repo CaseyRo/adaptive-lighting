@@ -80,6 +80,35 @@ async def test_four_range_entities_registered(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Naming — "lower/upper" display names, but entity_ids slug from field keys
+# (suggested_object_id pin keeps new profiles consistent with pre-rename ones)
+# ---------------------------------------------------------------------------
+
+
+async def test_entity_ids_slug_from_field_keys(hass) -> None:
+    """Renamed display names must not leak into entity_id slugs."""
+    entry = await _setup_entry(hass)
+    for field_key in FIELD_KEYS:
+        eid = _resolve_entity_id(hass, entry, field_key)
+        assert eid == f"number.{PROFILE_NAME}_{field_key}"
+
+
+async def test_friendly_names_use_lower_upper_wording(hass) -> None:
+    """Device page sorts alphabetically; lower/upper puts min above max."""
+    expected_roles = {
+        "min_brightness": "Brightness lower",
+        "max_brightness": "Brightness upper",
+        "min_color_temp": "Color temp lower",
+        "max_color_temp": "Color temp upper",
+    }
+    entry = await _setup_entry(hass)
+    for field_key, role in expected_roles.items():
+        eid = _resolve_entity_id(hass, entry, field_key)
+        state = hass.states.get(eid)
+        assert state.attributes["friendly_name"] == f"{PROFILE_NAME} {role}"
+
+
+# ---------------------------------------------------------------------------
 # 7.3 — Same device as the profile's switches
 # ---------------------------------------------------------------------------
 

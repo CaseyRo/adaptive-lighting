@@ -51,20 +51,22 @@ DOCS[CONF_INITIAL_TRANSITION] = "Fade time when a light first turns on, in secon
 CONF_INTERVAL, DEFAULT_INTERVAL = "interval", 90
 DOCS[CONF_INTERVAL] = "How often to recompute and re-apply the curve, in seconds."
 
-CONF_MAX_BRIGHTNESS, DEFAULT_MAX_BRIGHTNESS = "max_brightness", 100
+# CDiT default: 90 instead of upstream's 100. Leaves headroom so a manual
+# "brighter please" bump above the curve is always possible.
+CONF_MAX_BRIGHTNESS, DEFAULT_MAX_BRIGHTNESS = "max_brightness", 90
 DOCS[CONF_MAX_BRIGHTNESS] = "Brightness at the peak of the day, in percent."
 
 CONF_MAX_COLOR_TEMP, DEFAULT_MAX_COLOR_TEMP = "max_color_temp", 5500
 DOCS[CONF_MAX_COLOR_TEMP] = "Color temperature at the peak of the day, in Kelvin."
 
-# CDiT default: 5 instead of upstream's 1. 1% reads as off on most bulbs;
-# 5% is the dim-but-visible floor.
-CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS = "min_brightness", 5
+# CDiT default: 10 instead of upstream's 1. 1% reads as off on most bulbs
+# (and 5% proved too dim on gloomy days); 10% is the usable floor.
+CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS = "min_brightness", 10
 DOCS[CONF_MIN_BRIGHTNESS] = "Brightness during the night, in percent."
 
-# CDiT default: 2200 K instead of upstream's 2000 K. 2000 K reads as
-# sodium-vapor orange; 2200 K is a softer warm-lamp tone.
-CONF_MIN_COLOR_TEMP, DEFAULT_MIN_COLOR_TEMP = "min_color_temp", 2200
+# CDiT default: 2000 K (matches upstream). Earlier the fork used 2200 K
+# ("sodium-vapor orange" worry), but in practice the deeper warm tone won.
+CONF_MIN_COLOR_TEMP, DEFAULT_MIN_COLOR_TEMP = "min_color_temp", 2000
 DOCS[CONF_MIN_COLOR_TEMP] = "Color temperature during the night, in Kelvin."
 
 CONF_PREFER_RGB_COLOR, DEFAULT_PREFER_RGB_COLOR = "prefer_rgb_color", False
@@ -165,12 +167,14 @@ UNDO_UPDATE_LISTENER = "undo_update_listener"
 # `field_key` becomes the entity's unique-id suffix; the `conf_key` ties
 # the entity back to its initial-seed value in `entry.options`.
 # Design decisions 5, 6, 11 — see add-runtime-range-controls/design.md.
+# Naming: "lower/upper" (not "min/max") so the device page — which sorts
+# entities alphabetically by name — lists min before max for each quantity.
 RANGE_ENTITIES: list[dict[str, Any]] = [
     {
         "field_key": "min_brightness",
         "conf_key": CONF_MIN_BRIGHTNESS,
         "default": DEFAULT_MIN_BRIGHTNESS,
-        "name": "Min brightness",
+        "name": "Brightness lower",
         "native_min": 1,
         "native_max": 100,
         "step": 1,
@@ -181,7 +185,7 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
         "field_key": "max_brightness",
         "conf_key": CONF_MAX_BRIGHTNESS,
         "default": DEFAULT_MAX_BRIGHTNESS,
-        "name": "Max brightness",
+        "name": "Brightness upper",
         "native_min": 1,
         "native_max": 100,
         "step": 1,
@@ -192,7 +196,7 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
         "field_key": "min_color_temp",
         "conf_key": CONF_MIN_COLOR_TEMP,
         "default": DEFAULT_MIN_COLOR_TEMP,
-        "name": "Min color temp",
+        "name": "Color temp lower",
         "native_min": 1000,
         "native_max": 10000,
         "step": 100,
@@ -203,7 +207,7 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
         "field_key": "max_color_temp",
         "conf_key": CONF_MAX_COLOR_TEMP,
         "default": DEFAULT_MAX_COLOR_TEMP,
-        "name": "Max color temp",
+        "name": "Color temp upper",
         "native_min": 1000,
         "native_max": 10000,
         "step": 100,

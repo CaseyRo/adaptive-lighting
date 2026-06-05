@@ -247,16 +247,16 @@
   "entity": {
     "number": {
       "min_brightness": {
-        "name": "Min brightness"
+        "name": "Brightness lower"
       },
       "max_brightness": {
-        "name": "Max brightness"
+        "name": "Brightness upper"
       },
       "min_color_temp": {
-        "name": "Min color temp"
+        "name": "Color temp lower"
       },
       "max_color_temp": {
-        "name": "Max color temp"
+        "name": "Color temp upper"
       }
     },
     "sensor": {

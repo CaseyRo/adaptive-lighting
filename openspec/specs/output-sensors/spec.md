@@ -139,7 +139,7 @@ The resulting friendly names SHALL follow this table for a profile named `Dining
 | Output-color-temp sensor | `"Output color temp"` | `Dining MVP Output color temp` |
 | Sun-elevation sensor | `"Sun elevation"` | `Dining MVP Sun elevation` |
 
-The chosen role labels SHALL NOT collide with any existing entity's `_attr_name` on the same device (specifically: not `"Brightness"`, which is the adapt-brightness switch's role per `add-runtime-range-controls`, and not `"Min color temp"` / `"Max color temp"`, which are the range-number roles).
+The chosen role labels SHALL NOT collide with any existing entity's `_attr_name` on the same device (specifically: not `"Brightness"`, which is the adapt-brightness switch's role per `add-runtime-range-controls`, and not `"Color temp lower"` / `"Color temp upper"`, which are the range-number roles).
 
 #### Scenario: Friendly names compose from device name + sensor role
 
@@ -155,7 +155,7 @@ The chosen role labels SHALL NOT collide with any existing entity's `_attr_name`
 - **WHEN** all ten entities' friendly names are inspected
 - **THEN** no two entities SHALL share the same friendly name
 - **AND** specifically the adapt-brightness switch ("Dining MVP Brightness") and the output-brightness sensor ("Dining MVP Output brightness") SHALL be distinguishable strings
-- **AND** the output-color-temp sensor ("Dining MVP Output color temp") SHALL be distinguishable from the "Min color temp" and "Max color temp" number entities
+- **AND** the output-color-temp sensor ("Dining MVP Output color temp") SHALL be distinguishable from the "Color temp lower" and "Color temp upper" number entities
 
 ### Requirement: Ambient lux sensor mirrors the configured lux sensor's reading
 

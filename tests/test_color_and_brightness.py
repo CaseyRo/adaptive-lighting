@@ -27,7 +27,7 @@ T_SUNSET = dt.datetime(2026, 3, 21, 18, 0, 0, tzinfo=UTC)
 
 @pytest.fixture
 def settings() -> SunLightSettings:
-    """Standard CDiT defaults — 5–100 % brightness, 2200–5500 K."""
+    """Fixed test range — 5-100 % brightness, 2200-5500 K (explicit, not DEFAULT_*)."""
     return SunLightSettings(
         name="test",
         min_brightness=5,

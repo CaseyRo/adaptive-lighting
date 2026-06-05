@@ -116,10 +116,12 @@ The resulting friendly names SHALL follow this table for a profile named `Dining
 | Master switch | `None` | `Dining MVP` |
 | Adapt-brightness switch | `"Brightness"` | `Dining MVP Brightness` |
 | Adapt-color switch | `"Color"` | `Dining MVP Color` |
-| Min brightness number | `"Min brightness"` | `Dining MVP Min brightness` |
-| Max brightness number | `"Max brightness"` | `Dining MVP Max brightness` |
-| Min color temp number | `"Min color temp"` | `Dining MVP Min color temp` |
-| Max color temp number | `"Max color temp"` | `Dining MVP Max color temp` |
+| Min brightness number | `"Brightness lower"` | `Dining MVP Brightness lower` |
+| Max brightness number | `"Brightness upper"` | `Dining MVP Brightness upper` |
+| Min color temp number | `"Color temp lower"` | `Dining MVP Color temp lower` |
+| Max color temp number | `"Color temp upper"` | `Dining MVP Color temp upper` |
+
+The range numbers use "lower/upper" wording (not "Min/Max") so the HA device page — which sorts entities alphabetically by friendly name — lists each quantity's lower bound before its upper bound. The number entities SHALL additionally pin `suggested_object_id` to their field key (`min_brightness`, `max_brightness`, `min_color_temp`, `max_color_temp`) so newly created profiles slug the same entity_ids as profiles created before the rename.
 
 Existing `unique_id`s SHALL remain unchanged; the entity registry SHALL preserve existing `entity_id`s for any deployed install.
 
@@ -130,7 +132,8 @@ Existing `unique_id`s SHALL remain unchanged; the entity registry SHALL preserve
 - **THEN** the master switch's friendly name SHALL be exactly "Dining MVP"
 - **AND** the adapt-brightness switch's friendly name SHALL be exactly "Dining MVP Brightness"
 - **AND** the adapt-color switch's friendly name SHALL be exactly "Dining MVP Color"
-- **AND** the four range number entities' friendly names SHALL be "Dining MVP Min brightness", "Dining MVP Max brightness", "Dining MVP Min color temp", "Dining MVP Max color temp"
+- **AND** the four range number entities' friendly names SHALL be "Dining MVP Brightness lower", "Dining MVP Brightness upper", "Dining MVP Color temp lower", "Dining MVP Color temp upper"
+- **AND** the four range number entities' entity_ids SHALL slug from the field keys (e.g. `number.dining_mvp_min_brightness`), not from the display names
 
 #### Scenario: Existing entity_ids survive the rename
 

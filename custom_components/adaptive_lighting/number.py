@@ -101,6 +101,16 @@ class AdaptiveRangeNumber(RestoreNumber):
         self._attr_native_value = self._options_value()
 
     @property
+    def suggested_object_id(self) -> str | None:
+        """Pin entity_id slugs to the field key (e.g. ``_min_brightness``).
+
+        The display names use "lower/upper" wording (device-page sort order),
+        but entity_ids stay on the min/max field keys so new profiles slug
+        identically to ones created before the rename.
+        """
+        return self._field_key
+
+    @property
     def device_info(self) -> DeviceInfo:
         """Group with the profile's switches under one device."""
         profile_name = self._entry.data.get("name") or self._entry.title
