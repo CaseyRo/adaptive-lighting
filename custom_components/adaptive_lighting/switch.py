@@ -849,7 +849,9 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         self._lux_turned_off: set[str] = getattr(self, "_lux_turned_off", set())
         self._last_lux_factor: float = 1.0
         self._remove_lux_listener: CALLBACK_TYPE | None = getattr(
-            self, "_remove_lux_listener", None
+            self,
+            "_remove_lux_listener",
+            None,
         )
         self._expand_light_groups()
 
@@ -1090,7 +1092,8 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
                 context = self.create_context("lux_change")
                 self.hass.async_create_task(
                     self._update_attrs_and_maybe_adapt_lights(
-                        context=context, force=True,
+                        context=context,
+                        force=True,
                     ),
                 )
 

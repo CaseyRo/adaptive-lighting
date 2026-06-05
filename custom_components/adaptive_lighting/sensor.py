@@ -42,7 +42,7 @@ async def async_setup_entry(
     """Create the output sensors for this config entry."""
     has_lux = bool(
         config_entry.options.get(CONF_LUX_SENSOR)
-        or config_entry.data.get(CONF_LUX_SENSOR)
+        or config_entry.data.get(CONF_LUX_SENSOR),
     )
     entities = [
         AdaptiveOutputSensor(

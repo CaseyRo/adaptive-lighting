@@ -107,15 +107,14 @@ def _remove_orphan_lux_sensors(
     """Remove lux output sensors when lux_sensor is no longer configured."""
     has_lux = bool(
         config_entry.options.get(CONF_LUX_SENSOR)
-        or config_entry.data.get(CONF_LUX_SENSOR)
+        or config_entry.data.get(CONF_LUX_SENSOR),
     )
     if has_lux:
         return
     registry = er.async_get(hass)
     for entry in list(registry.entities.values()):
-        if (
-            entry.config_entry_id == config_entry.entry_id
-            and any(entry.unique_id.endswith(s) for s in _LUX_CONDITIONAL_SUFFIXES)
+        if entry.config_entry_id == config_entry.entry_id and any(
+            entry.unique_id.endswith(s) for s in _LUX_CONDITIONAL_SUFFIXES
         ):
             _LOGGER.info(
                 "Removing orphan lux sensor %s (lux_sensor no longer configured).",
