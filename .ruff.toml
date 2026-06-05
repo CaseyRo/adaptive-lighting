@@ -1,6 +1,8 @@
 # The contents of this file is based on https://github.com/home-assistant/core/blob/dev/pyproject.toml
 
-target-version = "py310"
+# Matches pyproject.toml's requires-python (>=3.12); switch.py already uses
+# 3.12-only `type` alias statements.
+target-version = "py312"
 [lint]
 select = ["ALL"]
 
@@ -27,6 +29,7 @@ ignore = [
 "tests/*.py" = [
     "ARG001",  # Unused function argument: `call`
     "D100",    # Missing docstring in public module
+    "D102",    # Missing docstring in public method (test-class methods)
     "D103",    # Missing docstring in public function
     "D205",    # 1 blank line required between summary line and description
     "D400",    # First line should end with a period

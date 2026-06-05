@@ -123,7 +123,10 @@ def _remove_orphan_lux_sensors(
             registry.async_remove(entry.entity_id)
 
 
-async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_migrate_entry(
+    hass: HomeAssistant,  # noqa: ARG001 — signature required by HA
+    config_entry: ConfigEntry,
+) -> bool:
     """Reject older config-entry versions with a friendly recreate message.
 
     Spec R8 + design D4: this fork deliberately does not migrate upstream

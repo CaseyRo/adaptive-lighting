@@ -42,12 +42,12 @@ class TestBrightnessCurve:
     """Spec R4: piecewise tanh ramp around the two sun events."""
 
     def test_min_brightness_more_than_half_width_before_sunrise(self, settings):
-        """T = sunrise − 2h → still deep night, brightness at minimum."""
+        """T = sunrise - 2h → still deep night, brightness at minimum."""
         t = T_SUNRISE - timedelta(hours=2)
         assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
 
     def test_min_brightness_exactly_at_clamp_boundary(self, settings):
-        """T = sunrise − half_width → exactly at the boundary, still min."""
+        """T = sunrise - half_width → exactly at the boundary, still min."""
         t = T_SUNRISE - timedelta(seconds=HALF_WIDTH)
         assert settings.brightness_pct(t, T_SUNRISE, T_SUNSET) == 5
 

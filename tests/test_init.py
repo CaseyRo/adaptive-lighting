@@ -56,7 +56,8 @@ async def test_stale_version_raises_config_entry_error(hass, caplog) -> None:
     # The full captured log (which includes the exception traceback) should
     # carry our friendly "delete and recreate" message so the user sees it.
     text = caplog.text.lower()
-    assert "delete" in text and "recreate" in text
+    assert "delete" in text
+    assert "recreate" in text
 
 
 async def test_unload_entry(hass) -> None:

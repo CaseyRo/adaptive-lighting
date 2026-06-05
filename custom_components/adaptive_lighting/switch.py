@@ -1112,9 +1112,9 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             return None
         try:
             value = float(state.state)
-            return value if value > 0 else None
         except (TypeError, ValueError):
             return None
+        return value if value > 0 else None
 
     def _call_on_remove_callbacks(self) -> None:
         """Call callbacks registered by async_on_remove."""
@@ -1211,7 +1211,9 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             force=False,
         )
 
-    async def prepare_adaptation_data(
+    # Complexity inherited from upstream's per-light adaptation pipeline;
+    # splitting it would obscure the linear lux-gate -> service-data flow.
+    async def prepare_adaptation_data(  # noqa: PLR0912, PLR0915
         self,
         light: str,
         transition: int | None = None,
@@ -1502,7 +1504,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             SIGNAL_OUTPUTS_UPDATED.format(entry_id=self._config_entry.entry_id),
         )
 
-    async def _update_attrs_and_maybe_adapt_lights(
+    async def _update_attrs_and_maybe_adapt_lights(  # noqa: PLR0912
         self,
         *,
         context: Context,
@@ -1542,7 +1544,9 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         if self._lux_turned_off and self._target_lux > 0:
             current_lux = self._read_lux_sensor()
             if current_lux is not None and current_lux <= self._target_lux:
-                recovering = [l for l in self._lux_turned_off if l in lights]
+                recovering = [
+                    light_id for light_id in self._lux_turned_off if light_id in lights
+                ]
                 self._lux_turned_off -= set(recovering)
                 for light_id in recovering:
                     _LOGGER.debug(
@@ -1653,7 +1657,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
     def fire_manual_control_event(
         self,
         light: str,
-        context: Context,
+        context: Context,  # noqa: ARG002 — signature kept for manager compatibility
     ) -> None:
         """Deprecated no-op kept for compatibility with the manager bus listener.
 

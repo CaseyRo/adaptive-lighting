@@ -298,7 +298,7 @@ def time_to_float(time: dt.time | dt.datetime) -> float:
 
 
 def _kw(input):
-    location = Location(LocationInfo(timezone=dt.timezone.utc))
+    location = Location(LocationInfo(timezone=dt.UTC))
     return {
         "name": "Adaptive Lighting Simulator",
         "adapt_until_sleep": input.adapt_until_sleep(),

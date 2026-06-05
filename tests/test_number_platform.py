@@ -7,6 +7,7 @@ no-reload-on-slider write, and the curve-math read path.
 from __future__ import annotations
 
 import datetime
+import logging
 from unittest.mock import patch
 
 import pytest
@@ -138,7 +139,7 @@ async def test_number_entities_share_switch_device(hass) -> None:
 
 
 @pytest.mark.parametrize(
-    "field_key,expected",
+    ("field_key", "expected"),
     [
         ("min_brightness", {"min": 1.0, "max": 100.0, "step": 1, "unit": "%"}),
         ("max_brightness", {"min": 1.0, "max": 100.0, "step": 1, "unit": "%"}),
@@ -259,7 +260,7 @@ async def test_restore_state_survives_restart(hass) -> None:
     object.__setattr__(
         entry,
         "modified_at",
-        datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
+        datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC),
     )
 
     # Prime the restore cache with a saved native_value of 30.
@@ -411,8 +412,6 @@ async def test_curve_math_falls_back_on_unavailable(hass, caplog) -> None:
 
     al_data = hass.data[DOMAIN][entry.entry_id]
     al_switch = al_data["switch"]
-
-    import logging
 
     caplog.set_level(logging.DEBUG)
     settings = al_switch.sun_light_settings

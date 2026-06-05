@@ -6,6 +6,7 @@ Diagnostics) using HA's `section()` helper and native selectors throughout.
 See design.md decisions 1, 5, 6, 9, 14 and specs/options-flow/spec.md R1-R7.
 """
 
+import contextlib
 import logging
 from typing import Any
 
@@ -464,6 +465,7 @@ class OptionsFlowHandler(OptionsFlowWithReload):
                 continue
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
+        """Render the single-page options form and handle its submission."""
         conf = self.config_entry
         if conf.source == SOURCE_IMPORT:
             return self.async_abort(reason="yaml_managed")
@@ -508,10 +510,8 @@ class OptionsFlowHandler(OptionsFlowWithReload):
         if lux_sensor_id:
             lux_state = self.hass.states.get(lux_sensor_id)
             if lux_state and lux_state.state not in ("unavailable", "unknown"):
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     lux_reading = f"{float(lux_state.state):.0f} lx"
-                except (TypeError, ValueError):
-                    pass
 
         return self.async_show_form(
             step_id="init",

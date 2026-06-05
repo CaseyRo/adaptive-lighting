@@ -145,12 +145,12 @@ def _tanh_day_curve(
     """Piecewise tanh ramp from value_min to value_max around sunrise/sunset.
 
     Schema (specs/options-flow/spec.md R4):
-      - t ≤ t_sunrise − half_width:                  value_min
-      - t_sunrise − half_width < t < t_sunrise + half_width:
+      - t ≤ t_sunrise - half_width:                  value_min
+      - t_sunrise - half_width < t < t_sunrise + half_width:
                                                      tanh ramp min → max
-      - t_sunrise + half_width ≤ t ≤ t_sunset − half_width:
+      - t_sunrise + half_width ≤ t ≤ t_sunset - half_width:
                                                      value_max
-      - t_sunset − half_width < t < t_sunset + half_width:
+      - t_sunset - half_width < t < t_sunset + half_width:
                                                      tanh ramp max → min
       - t ≥ t_sunset + half_width:                   value_min
     """

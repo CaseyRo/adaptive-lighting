@@ -101,7 +101,9 @@ def _section_inner_keys(schema_section) -> set[str]:
 def test_options_schema_has_all_seven_sections_in_order() -> None:
     """R1: the options form returns the seven named sections in order."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     keys = [
         k.schema if hasattr(k, "schema") else k
@@ -115,7 +117,9 @@ def test_each_section_contains_only_its_specified_fields() -> None:
     the layout table.
     """
     schema = _build_options_schema(
-        {}, show_send_split_delay=True, show_target_lux=False
+        {},
+        show_send_split_delay=True,
+        show_target_lux=False,
     )
     for marker in schema.schema:  # type: ignore[attr-defined]
         section_id = marker.schema if hasattr(marker, "schema") else marker
@@ -137,7 +141,9 @@ def test_each_section_contains_only_its_specified_fields() -> None:
 def test_send_split_delay_hidden_when_driver_false() -> None:
     """R2: send_split_delay is absent when separate_turn_on_commands=False."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     advanced_marker = next(
         m
@@ -151,7 +157,9 @@ def test_send_split_delay_hidden_when_driver_false() -> None:
 def test_send_split_delay_visible_when_driver_true() -> None:
     """R2: send_split_delay appears when separate_turn_on_commands=True."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=True, show_target_lux=False
+        {},
+        show_send_split_delay=True,
+        show_target_lux=False,
     )
     advanced_marker = next(
         m
@@ -170,7 +178,9 @@ def test_send_split_delay_visible_when_driver_true() -> None:
 def test_default_sunrise_and_sunset_entities() -> None:
     """R3: default entities point at the built-in sun.sun sensors."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     sun_marker = next(
         m
@@ -200,7 +210,9 @@ def test_sun_entity_selectors_are_strict_timestamp_sensors() -> None:
     device_class=timestamp.
     """
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     sun_marker = next(
         m
@@ -229,9 +241,11 @@ def test_sun_entity_selectors_are_strict_timestamp_sensors() -> None:
 
 
 def test_brightness_uses_slider_number_selector() -> None:
-    """R5: brightness fields are NumberSelectors with slider mode, 1–100 %, step 1."""
+    """R5: brightness fields are NumberSelectors with slider mode, 1-100 %, step 1."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     daytime_marker = next(
         m
@@ -252,9 +266,11 @@ def test_brightness_uses_slider_number_selector() -> None:
 
 
 def test_color_temp_uses_box_number_selector() -> None:
-    """R5: color-temp fields are NumberSelectors, 1000–10000 K, step 100."""
+    """R5: color-temp fields are NumberSelectors, 1000-10000 K, step 100."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     daytime_marker = next(
         m
@@ -276,7 +292,9 @@ def test_color_temp_uses_box_number_selector() -> None:
 def test_booleans_use_boolean_selector() -> None:
     """R5: every boolean field renders as a BooleanSelector."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=True, show_target_lux=False
+        {},
+        show_send_split_delay=True,
+        show_target_lux=False,
     )
     boolean_fields = {
         CONF_PREFER_RGB_COLOR,
@@ -368,7 +386,9 @@ async def test_options_flow_renders_sectioned_schema(hass) -> None:
 def test_target_lux_hidden_when_no_sensor() -> None:
     """target_lux should not appear when lux_sensor is empty."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     lux_marker = next(
         m
@@ -400,7 +420,9 @@ def test_target_lux_visible_when_sensor_set() -> None:
 def test_lux_sensor_selector_filters_to_illuminance() -> None:
     """lux_sensor entity selector should filter to device_class=illuminance."""
     schema = _build_options_schema(
-        {}, show_send_split_delay=False, show_target_lux=False
+        {},
+        show_send_split_delay=False,
+        show_target_lux=False,
     )
     lux_marker = next(
         m
