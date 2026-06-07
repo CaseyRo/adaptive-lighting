@@ -99,6 +99,7 @@ from .const import (
     CONF_MIN_COLOR_TEMP,
     CONF_MULTI_LIGHT_INTERCEPT,
     CONF_PREFER_RGB_COLOR,
+    CONF_RAMP_HALF_WIDTH,
     CONF_SEND_SPLIT_DELAY,
     CONF_SEPARATE_TURN_ON_COMMANDS,
     CONF_SKIP_REDUNDANT_COMMANDS,
@@ -870,12 +871,20 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             data,
         )
 
-    def _today_sun_events(self) -> tuple[datetime.datetime, datetime.datetime] | None:
+    def _today_sun_events(
+        self,
+        half_width: int,
+    ) -> tuple[datetime.datetime, datetime.datetime] | None:
         """Read the sunrise and sunset entities and return today's events.
 
         Day-anchoring (the `sensor.sun_next_rising` flipped-to-tomorrow
         case) is delegated to `anchor_sun_events`; returns None if either
         entity is missing or has an unparseable timestamp.
+
+        `half_width` MUST be the same value the curve evaluation uses this
+        tick (callers pass `sun_light_settings.ramp_half_width_seconds`) so
+        the post-sunset anchoring tail always matches the active ramp
+        width — see add-runtime-ramp-width design D5.
         """
         sunrise_state = self.hass.states.get(self._sunrise_entity)
         sunset_state = self.hass.states.get(self._sunset_entity)
@@ -914,7 +923,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             t_sunrise,
             t_sunset,
             now=dt_util.utcnow(),
-            half_width=RAMP_HALF_WIDTH_SECONDS,
+            half_width=half_width,
         )
 
     def _get_runtime_range(self, field_key: str) -> int:
@@ -954,13 +963,48 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         )
         return int(fallback)
 
+    def _get_runtime_ramp_width_seconds(self) -> int:
+        """Read the live ramp half-width from its number entity, in seconds.
+
+        Same registry-lookup pattern as `_get_runtime_range`, but the entity
+        stores minutes and has no `entry.options` mirror — the fallback is
+        the `RAMP_HALF_WIDTH_SECONDS` constant (spec R2, design D2/D4 of
+        add-runtime-ramp-width). Deliberately a dedicated helper: folding
+        unit conversion and a constant fallback into `_get_runtime_range`
+        would obscure both call patterns.
+        """
+        registry = entity_registry.async_get(self.hass)
+        unique_id = f"{self._config_entry.entry_id}_{CONF_RAMP_HALF_WIDTH}"
+        entity_id = registry.async_get_entity_id("number", DOMAIN, unique_id)
+        if entity_id is not None:
+            state = self.hass.states.get(entity_id)
+            if state is not None and state.state not in (
+                None,
+                "unavailable",
+                "unknown",
+            ):
+                try:
+                    return int(float(state.state)) * 60
+                except (TypeError, ValueError):
+                    pass
+        _LOGGER.debug(
+            "%s: ramp half-width entity unavailable for '%s' "
+            "(unique_id=%s) — falling back to RAMP_HALF_WIDTH_SECONDS=%s",
+            self._name,
+            CONF_RAMP_HALF_WIDTH,
+            unique_id,
+            RAMP_HALF_WIDTH_SECONDS,
+        )
+        return RAMP_HALF_WIDTH_SECONDS
+
     @property
     def sun_light_settings(self) -> SunLightSettings:
         """Return a fresh `SunLightSettings` built from current entity states.
 
-        Reads the four runtime range values on every property access so curve
-        evaluations always see the latest slider position. The dataclass init
-        cost is microseconds — cheap enough to do every tick (D8).
+        Reads the four runtime range values and the ramp half-width on every
+        property access so curve evaluations always see the latest slider
+        positions. The dataclass init cost is microseconds — cheap enough to
+        do every tick (D8).
         """
         return SunLightSettings(
             name=self._name,
@@ -968,7 +1012,7 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             max_color_temp=self._get_runtime_range("max_color_temp"),
             min_brightness=self._get_runtime_range("min_brightness"),
             min_color_temp=self._get_runtime_range("min_color_temp"),
-            ramp_half_width_seconds=RAMP_HALF_WIDTH_SECONDS,
+            ramp_half_width_seconds=self._get_runtime_ramp_width_seconds(),
         )
 
     @property
@@ -1250,11 +1294,14 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             return None
 
         # The switch might be off and not have _settings set.
-        events = self._today_sun_events()
+        # Build the settings ONCE so the curve and the day-anchoring share
+        # the same ramp half-width within this tick (D5).
+        sun_settings = self.sun_light_settings
+        events = self._today_sun_events(sun_settings.ramp_half_width_seconds)
         if events is None:
             return None
         t_sunrise, t_sunset = events
-        self._settings = self.sun_light_settings.get_settings(
+        self._settings = sun_settings.get_settings(
             transition,
             t_sunrise,
             t_sunset,
@@ -1523,11 +1570,14 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
             force,
         )
         assert self.is_on
-        events = self._today_sun_events()
+        # Single settings build per tick: curve and day-anchoring must share
+        # the same ramp half-width (D5).
+        sun_settings = self.sun_light_settings
+        events = self._today_sun_events(sun_settings.ramp_half_width_seconds)
         if events is not None:
             t_sunrise, t_sunset = events
             self._settings.update(
-                self.sun_light_settings.get_settings(
+                sun_settings.get_settings(
                     transition,
                     t_sunrise,
                     t_sunset,

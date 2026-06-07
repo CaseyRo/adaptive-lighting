@@ -133,7 +133,7 @@
 
 A Home Assistant custom component that adapts light brightness and color
 temperature to a sun-driven tanh curve. Each profile owns a set of lights
-and exposes three switches, four live-tunable sliders, and three graphable
+and exposes three switches, five live-tunable sliders, and three graphable
 sensors per profile.
 
 ## Install
@@ -173,7 +173,7 @@ For a profile named `Kitchen`:
 | `switch.kitchen_brightness` | Toggle brightness adaptation only |
 | `switch.kitchen_color` | Toggle color-temperature adaptation only |
 
-### Number entities (4) — live-tunable sliders
+### Number entities (5) — live-tunable sliders
 
 | Entity | Range | Step | Persist |
 |---|---|---|---|
@@ -181,11 +181,20 @@ For a profile named `Kitchen`:
 | `number.kitchen_max_brightness` | 1–100 % | 1 | RestoreNumber |
 | `number.kitchen_min_color_temp` | 1000–10000 K | 100 | RestoreNumber |
 | `number.kitchen_max_color_temp` | 1000–10000 K | 100 | RestoreNumber |
+| `number.kitchen_ramp_half_width` | 5–120 min | 1 | RestoreNumber |
 
 Slider position is the runtime truth — the curve reads from the entity on
 every tick. No integration reload on slider change. Values survive HA
-restarts. The options dialog re-seeds these values from the entities on
-open and overwrites them on save (explicit gesture wins).
+restarts. The options dialog re-seeds the four range values from the
+entities on open and overwrites them on save (explicit gesture wins).
+
+**Ramp half-width** sets how long the curve takes to transition at each sun
+event: the ramp spans the event ± this value, so the total transition is
+twice the slider (default 30 min = the classic 1-hour tanh window). It has
+**no options-dialog field** — the entity is the only knob, by design: it's
+meant to be driven from automation (e.g., a Node-RED seasonal flow that
+widens summer dusks and tightens winter ones). One value drives both the
+sunrise and sunset ramps.
 
 ### Sensor entities (3) — graphable outputs
 

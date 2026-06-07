@@ -20,7 +20,16 @@ DOMAIN = "adaptive_lighting"
 # 30 minutes is the eye-friendly circadian-transition sweet spot; long enough
 # to feel gradual, short enough to stay in-window across solstice-to-equinox
 # sunrise drift. Documented in design.md decision 15.
+# Since add-runtime-ramp-width this is the FALLBACK: the live value comes
+# from the per-profile ramp half-width number entity (default 30 min).
 RAMP_HALF_WIDTH_SECONDS = 1800
+
+# Runtime ramp half-width entity (add-runtime-ramp-width R1, R2, D2, D3).
+# Deliberately NOT in VALIDATION_TUPLES: there is no options-flow field —
+# the number entity is the only surface, with the constant above as the
+# unavailable-entity fallback. Unit is minutes; the curve consumes seconds.
+CONF_RAMP_HALF_WIDTH = "ramp_half_width"
+DEFAULT_RAMP_HALF_WIDTH_MIN = 30  # minutes; == RAMP_HALF_WIDTH_SECONDS / 60
 
 # CDiT config-entry schema version. Bumped from upstream's implicit v1.
 # An entry with version < CONFIG_ENTRY_VERSION fails async_setup_entry with
@@ -215,6 +224,22 @@ RANGE_ENTITIES: list[dict[str, Any]] = [
         "icon": "mdi:thermometer-high",
     },
 ]
+
+# Ramp half-width number-entity declaration (add-runtime-ramp-width R1, D2).
+# Kept OUT of RANGE_ENTITIES: it has no `entry.options` mirror, so the
+# options-seeding code paths that iterate the four range fields must not
+# pick it up. One value drives BOTH the sunrise and sunset ramps (D1); the
+# total transition is 2x this value. Unit is minutes; curve consumes seconds.
+RAMP_WIDTH_ENTITY: dict[str, Any] = {
+    "field_key": CONF_RAMP_HALF_WIDTH,
+    "default": DEFAULT_RAMP_HALF_WIDTH_MIN,
+    "name": "Ramp half-width",
+    "native_min": 5,
+    "native_max": 120,
+    "step": 1,
+    "unit": "min",
+    "icon": "mdi:transition",
+}
 
 # Output sensor declarations (add-output-sensors / R1, D4, D7).
 # Each dict drives one read-only `sensor` entity per AL profile. The `key`

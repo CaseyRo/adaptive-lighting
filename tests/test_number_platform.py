@@ -10,6 +10,7 @@ import datetime
 import logging
 from unittest.mock import patch
 
+import homeassistant.util.dt as dt_util
 import pytest
 from homeassistant.components.number import NumberMode
 from homeassistant.const import CONF_NAME
@@ -418,3 +419,183 @@ async def test_curve_math_falls_back_on_unavailable(hass, caplog) -> None:
     assert settings.max_brightness == 88  # fell back to options
     # DEBUG log mentions the missing entity
     assert "max_brightness" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# add-runtime-ramp-width — fifth entity: registration, bounds, naming
+# ---------------------------------------------------------------------------
+
+
+async def test_five_number_entities_registered(hass) -> None:
+    """R1: the entry owns five number entities incl. ramp_half_width."""
+    entry = await _setup_entry(hass)
+    registry = er.async_get(hass)
+    for field_key in (*FIELD_KEYS, "ramp_half_width"):
+        eid = registry.async_get_entity_id(
+            "number",
+            DOMAIN,
+            _unique_id(entry, field_key),
+        )
+        assert eid is not None, f"Missing number entity for {field_key}"
+    # The ramp-width entity shares the switches' device.
+    ent_reg = er.async_get(hass)
+    master_eid = ent_reg.async_get_entity_id("switch", DOMAIN, PROFILE_NAME)
+    master_dev_id = ent_reg.async_get(master_eid).device_id
+    ramp_eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    assert ent_reg.async_get(ramp_eid).device_id == master_dev_id
+
+
+async def test_ramp_width_entity_attributes(hass) -> None:
+    """R1: minute bounds 5-120, step 1, slider mode, composed name."""
+    entry = await _setup_entry(hass)
+    eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    assert eid == f"number.{PROFILE_NAME}_ramp_half_width"
+    state = hass.states.get(eid)
+    assert state is not None
+    attrs = state.attributes
+    assert attrs["min"] == 5.0
+    assert attrs["max"] == 120.0
+    assert attrs["step"] == 1
+    assert attrs["unit_of_measurement"] == "min"
+    assert attrs["mode"] == NumberMode.SLIDER
+    assert attrs["friendly_name"] == f"{PROFILE_NAME} Ramp half-width"
+
+
+# ---------------------------------------------------------------------------
+# add-runtime-ramp-width — default + restore semantics (two-tier, no options)
+# ---------------------------------------------------------------------------
+
+
+async def test_ramp_width_defaults_to_thirty(hass) -> None:
+    """R2: a fresh profile comes up at 30 minutes (== prior constant)."""
+    entry = await _setup_entry(hass)
+    eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    assert float(hass.states.get(eid).state) == 30.0
+
+
+async def test_ramp_width_restores_after_restart(hass) -> None:
+    """R2: restored value wins over the default; no entry.options tier."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_NAME: PROFILE_NAME},
+        options={},
+        version=CONFIG_ENTRY_VERSION,
+    )
+    entry.add_to_hass(hass)
+    fake_state = State(f"number.{PROFILE_NAME}_ramp_half_width", "75")
+    fake_extra = {"native_value": 75.0, "native_unit_of_measurement": "min"}
+    mock_restore_cache_with_extra_data(hass, [(fake_state, fake_extra)])
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    assert float(hass.states.get(eid).state) == 75.0
+
+
+async def test_ramp_width_slider_change_no_reload(hass) -> None:
+    """R2: moving the width slider must not unload/setup the entry."""
+    entry = await _setup_entry(hass)
+    eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    snapshot_options = dict(entry.options)
+    with (
+        patch(
+            "custom_components.adaptive_lighting.async_setup_entry",
+        ) as setup_spy,
+        patch(
+            "custom_components.adaptive_lighting.async_unload_entry",
+        ) as unload_spy,
+    ):
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": eid, "value": 60},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+    assert setup_spy.call_count == 0
+    assert unload_spy.call_count == 0
+    assert dict(entry.options) == snapshot_options
+
+
+# ---------------------------------------------------------------------------
+# add-runtime-ramp-width — curve read path (minutes -> seconds) + fallback
+# ---------------------------------------------------------------------------
+
+
+async def test_curve_uses_live_ramp_width(hass) -> None:
+    """R2/R3: entity at 60 -> next settings build carries 3600 seconds."""
+    entry = await _setup_entry(hass)
+    eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": eid, "value": 60},
+        blocking=True,
+    )
+    al_switch = hass.data[DOMAIN][entry.entry_id]["switch"]
+    settings = al_switch.sun_light_settings
+    assert settings.ramp_half_width_seconds == 3600
+
+
+async def test_curve_ramp_width_falls_back_to_constant(hass, caplog) -> None:
+    """R2: unavailable entity -> 1800-second constant + DEBUG log."""
+    entry = await _setup_entry(hass)
+    eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    hass.states.async_remove(eid)
+
+    al_switch = hass.data[DOMAIN][entry.entry_id]["switch"]
+    caplog.set_level(logging.DEBUG)
+    settings = al_switch.sun_light_settings
+    assert settings.ramp_half_width_seconds == 1800
+    assert "ramp_half_width" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# add-runtime-ramp-width — D5: anchoring tail matches the widened ramp
+# ---------------------------------------------------------------------------
+
+
+async def test_widened_evening_ramp_survives_sensor_flip(hass) -> None:
+    """R2/D5: width 60, sensors flipped to tomorrow, 45 min past sunset.
+
+    The day-anchoring must use the live width: with the old hardcoded
+    1800-second tail this instant would anchor to tomorrow and snap the
+    curve to minimum; with the live 3600-second width the down-ramp is
+    still in progress.
+    """
+    entry = await _setup_entry(hass)
+    eid = _resolve_entity_id(hass, entry, "ramp_half_width")
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": eid, "value": 60},
+        blocking=True,
+    )
+
+    now = dt_util.utcnow()
+    sunset_today = now - datetime.timedelta(minutes=45)
+    sunrise_today = sunset_today - datetime.timedelta(hours=16)
+    one_day = datetime.timedelta(days=1)
+    # Both `next_*` sensors have already flipped to tomorrow's events.
+    hass.states.async_set(
+        "sensor.sun_next_rising",
+        (sunrise_today + one_day).isoformat(),
+    )
+    hass.states.async_set(
+        "sensor.sun_next_setting",
+        (sunset_today + one_day).isoformat(),
+    )
+
+    al_switch = hass.data[DOMAIN][entry.entry_id]["switch"]
+    settings = al_switch.sun_light_settings
+    assert settings.ramp_half_width_seconds == 3600
+
+    events = al_switch._today_sun_events(settings.ramp_half_width_seconds)
+    assert events is not None
+    t_sunrise, t_sunset = events
+    assert t_sunset == sunset_today  # anchored back to today
+    assert t_sunrise == sunrise_today
+
+    brightness = settings.brightness_pct(now, t_sunrise, t_sunset)
+    assert settings.min_brightness < brightness < settings.max_brightness

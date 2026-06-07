@@ -1,19 +1,25 @@
 """Number platform for the Adaptive Lighting integration (CDiT fork).
 
-Each config entry exposes four live-tunable sliders that own the runtime
+Each config entry exposes five live-tunable sliders that own the runtime
 values the curve math reads on every tick:
 
 - ``number.<profile>_min_brightness``
 - ``number.<profile>_max_brightness``
 - ``number.<profile>_min_color_temp``
 - ``number.<profile>_max_color_temp``
+- ``number.<profile>_ramp_half_width``
 
 The entities extend ``RestoreNumber`` so values survive HA restarts without
 a separate ``Store`` helper. Slider changes do NOT write back to
 ``entry.options`` (no integration reload). Options-flow saves reload the
-integration, and the resulting fresh entities prefer the just-saved
+integration, and the resulting fresh range entities prefer the just-saved
 ``entry.options`` value over the restored state. See design.md decisions
 1-3 of the ``add-runtime-range-controls`` change.
+
+The ramp half-width entity (``add-runtime-ramp-width``) has NO
+``entry.options`` mirror — it is the only surface for the curve's
+transition width, so its restore precedence is simply restored-value →
+default (30 min). Total transition duration is twice the half-width.
 """
 
 from __future__ import annotations
@@ -28,7 +34,7 @@ from homeassistant.components.number import (
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, RANGE_ENTITIES
+from .const import DOMAIN, RAMP_WIDTH_ENTITY, RANGE_ENTITIES
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -43,8 +49,8 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create the four range entities for this config entry."""
-    entities = [
+    """Create the four range entities plus the ramp-width entity."""
+    entities: list[RestoreNumber] = [
         AdaptiveRangeNumber(
             entry=config_entry,
             field_key=row["field_key"],
@@ -59,6 +65,7 @@ async def async_setup_entry(
         )
         for row in RANGE_ENTITIES
     ]
+    entities.append(AdaptiveRampWidthNumber(entry=config_entry))
     async_add_entities(entities)
 
 
@@ -171,5 +178,69 @@ class AdaptiveRangeNumber(RestoreNumber):
         ``OptionsFlowWithReload`` reload on every slider tick. The
         RestoreNumber base class persists the value across restarts.
         """
+        self._attr_native_value = value
+        self.async_write_ha_state()
+
+
+class AdaptiveRampWidthNumber(RestoreNumber):
+    """Live-tunable ramp half-width for the curve's two sun-event ramps.
+
+    Unlike the four range entities there is NO ``entry.options`` mirror —
+    this entity is the only surface for the width (add-runtime-ramp-width
+    D2), intended to be driven seasonally from Node-RED. Restore precedence
+    is therefore two-tier: restored value → default. It must NOT inherit
+    ``AdaptiveRangeNumber``'s three-tier logic, which prefers the options
+    value after every options-flow save and would silently reset the width
+    to 30 on each unrelated save.
+    """
+
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.SLIDER
+    _attr_should_poll = False
+
+    def __init__(self, *, entry: ConfigEntry) -> None:
+        """Initialise the ramp half-width entity from its const declaration."""
+        self._entry = entry
+        self._field_key: str = RAMP_WIDTH_ENTITY["field_key"]
+        self._default: float = float(RAMP_WIDTH_ENTITY["default"])
+        self._attr_name = RAMP_WIDTH_ENTITY["name"]
+        self._attr_translation_key = self._field_key
+        self._attr_unique_id = f"{entry.entry_id}_{self._field_key}"
+        self._attr_native_min_value = RAMP_WIDTH_ENTITY["native_min"]
+        self._attr_native_max_value = RAMP_WIDTH_ENTITY["native_max"]
+        self._attr_native_step = RAMP_WIDTH_ENTITY["step"]
+        self._attr_native_unit_of_measurement = RAMP_WIDTH_ENTITY["unit"]
+        self._attr_icon = RAMP_WIDTH_ENTITY["icon"]
+        self._attr_native_value = self._default
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        """Pin the entity_id slug to the field key (``_ramp_half_width``)."""
+        return self._field_key
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Group with the profile's switches under one device."""
+        profile_name = self._entry.data.get("name") or self._entry.title
+        return DeviceInfo(
+            identifiers={(DOMAIN, profile_name)},
+            name=profile_name,
+            entry_type=DeviceEntryType.SERVICE,
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Seed with two-tier precedence: restored value, else default 30."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is None or last_state.state in (None, "unknown", "unavailable"):
+            self._attr_native_value = self._default
+            return
+        try:
+            self._attr_native_value = float(last_state.state)
+        except (TypeError, ValueError):
+            self._attr_native_value = self._default
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Persist to entity state only — never to ``entry.options``."""
         self._attr_native_value = value
         self.async_write_ha_state()
