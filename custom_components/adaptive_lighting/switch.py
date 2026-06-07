@@ -79,7 +79,7 @@ from .adaptation_utils import (
     has_effect_attribute,
     prepare_adaptation_data,
 )
-from .color_and_brightness import SunLightSettings, lux_reduce
+from .color_and_brightness import SunLightSettings, anchor_sun_events, lux_reduce
 from .const import (
     ADAPT_BRIGHTNESS_SWITCH,
     ADAPT_COLOR_SWITCH,
@@ -873,10 +873,9 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
     def _today_sun_events(self) -> tuple[datetime.datetime, datetime.datetime] | None:
         """Read the sunrise and sunset entities and return today's events.
 
-        Handles the case where `sensor.sun_next_rising` (or similar) has
-        already flipped to tomorrow's date by anchoring whichever event is in
-        the past via subtracting a day; returns None if either entity is
-        missing or has an unparseable timestamp.
+        Day-anchoring (the `sensor.sun_next_rising` flipped-to-tomorrow
+        case) is delegated to `anchor_sun_events`; returns None if either
+        entity is missing or has an unparseable timestamp.
         """
         sunrise_state = self.hass.states.get(self._sunrise_entity)
         sunset_state = self.hass.states.get(self._sunset_entity)
@@ -908,14 +907,15 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
                 sunset_state.state,
             )
             return None
-        # Anchor to today: if the entity holds tomorrow's value (typical of
-        # `sensor.sun_next_rising` after sunrise has passed), subtract one day.
-        now = dt_util.utcnow()
-        if t_sunrise > t_sunset and t_sunrise > now + timedelta(hours=12):
-            t_sunrise = t_sunrise - timedelta(days=1)
-        if t_sunset < t_sunrise and t_sunset < now - timedelta(hours=12):
-            t_sunset = t_sunset + timedelta(days=1)
-        return t_sunrise, t_sunset
+        # Anchor to the day surrounding `now`: `sensor.sun_next_rising`
+        # flips to tomorrow's event the moment sunrise passes (likewise for
+        # sunset), so normalize the pair before feeding the curve.
+        return anchor_sun_events(
+            t_sunrise,
+            t_sunset,
+            now=dt_util.utcnow(),
+            half_width=RAMP_HALF_WIDTH_SECONDS,
+        )
 
     def _get_runtime_range(self, field_key: str) -> int:
         """Read the live curve bound from its number entity.

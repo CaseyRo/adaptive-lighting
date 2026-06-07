@@ -15,6 +15,7 @@ import pytest
 from custom_components.adaptive_lighting.color_and_brightness import (
     SunLightSettings,
     _tanh_day_curve,
+    anchor_sun_events,
     lux_reduce,
 )
 
@@ -203,3 +204,125 @@ class TestLuxReduce:
     def test_boundary_just_below_min(self):
         result = lux_reduce(100.0, 500, 10100, 5)
         assert result is None  # 100 * 500/10100 ≈ 4.95 < 5
+
+
+class TestAnchorSunEvents:
+    """Day-anchoring of `next_*`-style sun sensor timestamps.
+
+    Regression for the June bug: `sun_next_rising` flips to tomorrow at
+    sunrise, and on long summer days tomorrow's sunrise is < 12 h away by
+    mid-afternoon — the old `now + 12h` guard then left the pair
+    describing tomorrow, collapsing the curve to minimum around 17:30
+    local instead of ramping down at sunset.
+    """
+
+    # June day in NL: sunrise 03:20 UTC (05:20 CEST), sunset 20:00 UTC.
+    JUNE_SUNRISE = dt.datetime(2026, 6, 7, 3, 20, tzinfo=UTC)
+    JUNE_SUNSET = dt.datetime(2026, 6, 7, 20, 0, tzinfo=UTC)
+    ONE_DAY = timedelta(days=1)
+
+    def test_morning_before_sunrise_unchanged(self):
+        """Pre-sunrise both sensors hold today's events — no shift."""
+        now = self.JUNE_SUNRISE - timedelta(hours=2)
+        r, s = anchor_sun_events(
+            self.JUNE_SUNRISE,
+            self.JUNE_SUNSET,
+            now,
+            HALF_WIDTH,
+        )
+        assert (r, s) == (self.JUNE_SUNRISE, self.JUNE_SUNSET)
+
+    def test_daytime_sunrise_flipped_is_pulled_back(self):
+        """Mid-morning: next_rising points at tomorrow → pulled back a day."""
+        now = self.JUNE_SUNRISE + timedelta(hours=4)
+        r, s = anchor_sun_events(
+            self.JUNE_SUNRISE + self.ONE_DAY,
+            self.JUNE_SUNSET,
+            now,
+            HALF_WIDTH,
+        )
+        assert (r, s) == (self.JUNE_SUNRISE, self.JUNE_SUNSET)
+
+    def test_june_late_afternoon_regression(self):
+        """17:30 CEST in June: tomorrow's sunrise is < 12 h away.
+
+        The old heuristic refused to pull it back and the curve collapsed
+        to min. The anchored pair must still describe *today*.
+        """
+        now = dt.datetime(2026, 6, 7, 15, 30, tzinfo=UTC)  # 17:30 CEST
+        r, s = anchor_sun_events(
+            self.JUNE_SUNRISE + self.ONE_DAY,
+            self.JUNE_SUNSET,
+            now,
+            HALF_WIDTH,
+        )
+        assert (r, s) == (self.JUNE_SUNRISE, self.JUNE_SUNSET)
+        # And the curve at that moment is full day, not minimum.
+        settings = SunLightSettings(
+            name="t",
+            min_brightness=5,
+            max_brightness=100,
+            min_color_temp=2200,
+            max_color_temp=5500,
+            ramp_half_width_seconds=HALF_WIDTH,
+        )
+        assert settings.brightness_pct(now, r, s) == 100
+
+    def test_post_sunset_ramp_tail_completes(self):
+        """10 min after sunset both sensors flipped to tomorrow.
+
+        Still inside the down-ramp → both pulled back so the ramp
+        finishes instead of snapping to minimum.
+        """
+        now = self.JUNE_SUNSET + timedelta(minutes=10)
+        r, s = anchor_sun_events(
+            self.JUNE_SUNRISE + self.ONE_DAY,
+            self.JUNE_SUNSET + self.ONE_DAY,
+            now,
+            HALF_WIDTH,
+        )
+        assert (r, s) == (self.JUNE_SUNRISE, self.JUNE_SUNSET)
+
+    def test_after_ramp_tail_stays_tomorrow(self):
+        """Past sunset + half_width the tomorrow pair is fine (night = min)."""
+        now = self.JUNE_SUNSET + timedelta(seconds=HALF_WIDTH, minutes=5)
+        r, s = anchor_sun_events(
+            self.JUNE_SUNRISE + self.ONE_DAY,
+            self.JUNE_SUNSET + self.ONE_DAY,
+            now,
+            HALF_WIDTH,
+        )
+        assert (r, s) == (
+            self.JUNE_SUNRISE + self.ONE_DAY,
+            self.JUNE_SUNSET + self.ONE_DAY,
+        )
+
+    def test_after_midnight_unchanged(self):
+        """00:30: sensors hold today's events again — no shift."""
+        now = dt.datetime(2026, 6, 7, 0, 30, tzinfo=UTC)
+        r, s = anchor_sun_events(
+            self.JUNE_SUNRISE,
+            self.JUNE_SUNSET,
+            now,
+            HALF_WIDTH,
+        )
+        assert (r, s) == (self.JUNE_SUNRISE, self.JUNE_SUNSET)
+
+    def test_winter_afternoon_still_anchors(self):
+        """Long-night season: the old guard happened to work; new code too."""
+        sunrise = dt.datetime(2026, 12, 21, 7, 30, tzinfo=UTC)
+        sunset = dt.datetime(2026, 12, 21, 15, 30, tzinfo=UTC)
+        now = dt.datetime(2026, 12, 21, 13, 0, tzinfo=UTC)
+        r, s = anchor_sun_events(sunrise + self.ONE_DAY, sunset, now, HALF_WIDTH)
+        assert (r, s) == (sunrise, sunset)
+
+    def test_stale_today_sunset_pushed_forward(self):
+        """A 'today's sunset' sensor still holding yesterday's event."""
+        now = self.JUNE_SUNRISE + timedelta(hours=4)
+        r, s = anchor_sun_events(
+            self.JUNE_SUNRISE,
+            self.JUNE_SUNSET - self.ONE_DAY,
+            now,
+            HALF_WIDTH,
+        )
+        assert (r, s) == (self.JUNE_SUNRISE, self.JUNE_SUNSET)

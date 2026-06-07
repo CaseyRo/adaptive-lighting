@@ -184,6 +184,42 @@ def _tanh_day_curve(
     )
 
 
+def anchor_sun_events(
+    t_sunrise: datetime,
+    t_sunset: datetime,
+    now: datetime,
+    half_width: int,
+) -> tuple[datetime, datetime]:
+    """Anchor `next_*`-style sensor timestamps to the day surrounding `now`.
+
+    `sensor.sun_next_rising` flips to tomorrow's event the moment today's
+    sunrise passes (and `sun_next_setting` likewise at sunset), so the raw
+    pair often describes the wrong day:
+
+    - Daytime: sunrise has flipped to tomorrow while sunset is still
+      today's → pull sunrise back one day. No "how far ahead" heuristic —
+      on long summer days tomorrow's sunrise is less than 12 h away by
+      mid-afternoon, which is exactly the case a time-distance guard gets
+      wrong.
+    - A stale "today's sunset" sensor still holding yesterday's event →
+      push sunset forward one day.
+    - Just after sunset both have flipped to tomorrow; while `now` is
+      still inside the down-ramp (within `half_width` seconds of the
+      sunset that just passed) → pull both back one day so the ramp
+      completes instead of snapping to the minimum.
+    """
+    one_day = timedelta(days=1)
+    if t_sunrise > t_sunset:
+        if t_sunset < now:
+            t_sunset += one_day
+        else:
+            t_sunrise -= one_day
+    elif t_sunset - one_day <= now < t_sunset - one_day + timedelta(seconds=half_width):
+        t_sunrise -= one_day
+        t_sunset -= one_day
+    return t_sunrise, t_sunset
+
+
 def find_a_b(x1: float, x2: float, y1: float, y2: float) -> tuple[float, float]:
     """Coefficients `a, b` for y = 0.5 * (tanh(a * (x - b)) + 1) passing through (x1,y1) and (x2,y2)."""
     a = (math.atanh(2 * y2 - 1) - math.atanh(2 * y1 - 1)) / (x2 - x1)
