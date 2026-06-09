@@ -5,7 +5,6 @@
   "config_flow": true,
   "dependencies": ["light"],
   "documentation": "https://github.com/CaseyRo/adaptive-lighting#readme",
-  "homeassistant": "2025.1.0",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/CaseyRo/adaptive-lighting/issues",
   "requirements": ["ulid-transform"],
