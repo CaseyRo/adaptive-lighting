@@ -136,17 +136,26 @@ temperature to a sun-driven tanh curve. Each profile owns a set of lights
 and exposes three switches, five live-tunable sliders, and three graphable
 sensors per profile.
 
-## Install
+## Installation
 
-Via HACS as a custom repository (this fork is not in the HACS default index):
+### HACS — custom repository
 
-1. HACS → Integrations → ⋮ → Custom repositories.
-2. Add `https://github.com/CaseyRo/adaptive-lighting` as an **Integration**.
-3. Install **Adaptive Lighting (CDiT)**.
-4. Restart Home Assistant.
+This is the **CDiT fork** of Adaptive Lighting and is **not** in the HACS default list (the upstream `basnijholt/adaptive-lighting` is — install that if you want the original). To use this fork, add it as a HACS **custom repository**:
 
-Or manually copy `custom_components/adaptive_lighting/` into your HA
-config's `custom_components/` directory and restart.
+1. Make sure [HACS](https://hacs.xyz) is installed.
+2. In Home Assistant: **HACS** → top-right **⋮** → **Custom repositories**.
+3. **Repository:** `https://github.com/CaseyRo/adaptive-lighting` — **Type:** `Integration` — click **Add**.
+4. Search HACS for **Adaptive Lighting (CDiT)**, open it, and click **Download**.
+5. **Restart Home Assistant.**
+6. **Settings → Devices & Services → Add Integration →** search **Adaptive Lighting**.
+
+> Note: this fork uses the same `adaptive_lighting` domain as upstream, so do **not** install both at once.
+
+### Manual install
+
+1. Download the latest release, or copy this repo.
+2. Copy `custom_components/adaptive_lighting/` into your Home Assistant `config/custom_components/`.
+3. **Restart Home Assistant**, then add via **Settings → Devices & Services → Add Integration**.
 
 ## Setup
 
