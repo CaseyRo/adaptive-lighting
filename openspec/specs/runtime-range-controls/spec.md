@@ -195,4 +195,3 @@ Moving the slider SHALL NOT trigger an integration reload, matching the no-reloa
 - **WHEN** the curve is evaluated 45 minutes after today's sunset
 - **THEN** the day-anchoring SHALL still resolve the pair to today's events
 - **AND** the computed brightness SHALL lie strictly between the profile's minimum and maximum (the down-ramp is still in progress, not snapped to minimum)
-
