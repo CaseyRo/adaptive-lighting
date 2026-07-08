@@ -47,6 +47,13 @@ maintainers who can actually fix them for everyone.
   (rare; can happen during very early HA startup), the sensor renders
   as `unknown` for that tick — the other two sensors continue updating
   normally.
+- **Fifth live-tunable `number` entity: `ramp_half_width`** (5–120 min) —
+  completes the runtime curve-control set alongside the four range bounds
+  (`min_brightness`, `max_brightness`, `min_color_temp`, `max_color_temp`).
+  It tunes the tanh ramp half-width around each sun event live and persists
+  via `RestoreNumber`; unlike the four range fields it is not surfaced in the
+  options dialog. Shipped earlier without a changelog entry — recorded here
+  for completeness.
 
 ### Changed
 
