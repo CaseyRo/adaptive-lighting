@@ -67,13 +67,14 @@
 >
 > ## ✨ What's new in 2.1
 >
-> Each profile now exposes **four live-tunable sliders** as `number`
+> Each profile now exposes **five live-tunable sliders** as `number`
 > entities you can drop on any Lovelace card:
 >
 > - `number.<profile>_min_brightness` — night-floor brightness (1–100 %)
 > - `number.<profile>_max_brightness` — peak-day brightness (1–100 %)
 > - `number.<profile>_min_color_temp` — warmest tone (1000–10000 K)
 > - `number.<profile>_max_color_temp` — coolest tone (1000–10000 K)
+> - `number.<profile>_ramp_half_width` — curve ramp half-width (5–120 min)
 >
 > **Slider position is the runtime truth.** Move a slider on the dashboard
 > and the curve picks it up on the next tick — no integration reload, no
@@ -93,6 +94,7 @@
 >   - number.dining_mvp_max_brightness
 >   - number.dining_mvp_min_color_temp
 >   - number.dining_mvp_max_color_temp
+>   - number.dining_mvp_ramp_half_width
 > ```
 >
 > Also in 2.1: **entity friendly names are now readable.** A profile named
