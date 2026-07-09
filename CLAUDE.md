@@ -33,7 +33,6 @@ Python tooling is `uv` (not `pip` or `poetry`). All commands assume an activated
 | Run a single test | `uv run pytest tests/test_config_flow.py::test_options_flow_init` |
 | Lint everything (pre-commit) | `./scripts/lint` |
 | Run HA locally with the custom component loaded | `./scripts/develop` (boots HA on `localhost:8123` from `./config/`) |
-| Refresh test matrix | `./scripts/update-test-matrix.py` |
 
 Ruff config lives in `.ruff.toml`. Pre-commit hooks in `.pre-commit-config.yaml`. Both enforce on push via `./scripts/lint`.
 
