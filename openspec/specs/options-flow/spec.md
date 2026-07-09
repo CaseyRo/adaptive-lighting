@@ -264,4 +264,3 @@ On `async_setup_entry`, the integration SHALL scan the entity registry for entit
 - **WHEN** the integration runs the sleep-switch cleanup
 - **AND** another integration owns a similarly named entity (e.g., a user-created `switch.adaptive_lighting_sleep_mode_demo` template switch)
 - **THEN** that foreign entity SHALL NOT be removed from the entity registry
-
