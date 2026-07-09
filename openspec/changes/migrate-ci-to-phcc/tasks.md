@@ -27,4 +27,4 @@
 
 - [x] 4.1 `uv run pytest` still green locally (164)
 - [x] 4.2 Lint the new workflow YAML (actionlint if available; else careful review)
-- [ ] 4.3 Push; confirm the new pytest matrix goes green and Docker / update-test-matrix no longer run
+- [x] 4.3 Push; confirm the new pytest matrix goes green and Docker / update-test-matrix no longer run (CI: pytest stable+dev green in ~30s; Docker/update-test-matrix removed)
