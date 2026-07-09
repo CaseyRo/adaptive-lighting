@@ -1,3 +1,26 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+- [🌞 Adaptive Lighting (CDiT fork)](#-adaptive-lighting-cdit-fork)
+  - [Installation](#installation)
+    - [HACS — custom repository](#hacs--custom-repository)
+    - [Manual install](#manual-install)
+  - [Setup](#setup)
+  - [What each profile creates](#what-each-profile-creates)
+    - [Switches (3)](#switches-3)
+    - [Number entities (5) — live-tunable sliders](#number-entities-5--live-tunable-sliders)
+    - [Sensor entities (3) — graphable outputs](#sensor-entities-3--graphable-outputs)
+  - [Tuning live](#tuning-live)
+  - [Services](#services)
+    - [`adaptive_lighting.apply`](#adaptive_lightingapply)
+    - [`adaptive_lighting.change_switch_settings`](#adaptive_lightingchange_switch_settings)
+  - [Sun source](#sun-source)
+  - [Development](#development)
+  - [Sync with upstream](#sync-with-upstream)
+  - [Credits](#credits)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![Version](https://img.shields.io/github/v/release/CaseyRo/adaptive-lighting?include_prereleases&style=for-the-badge)](https://github.com/CaseyRo/adaptive-lighting/releases)
 [![Upstream](https://img.shields.io/badge/fork_of-basnijholt%2Fadaptive--lighting-blue?style=for-the-badge)](https://github.com/basnijholt/adaptive-lighting)
