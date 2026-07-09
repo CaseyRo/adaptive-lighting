@@ -1,52 +1,39 @@
 # Developer notes for the tests directory
 
-To run the tests, check out the [CI configuration](../.github/workflows/pytest.yml) to see how they are executed in the CI pipeline.
-Alternatively, you can use the provided Docker image to run the tests locally or run them with VS Code directly in the dev container.
+The tests use [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component)
+(PHCC), which bundles a pinned Home Assistant plus its test fixtures. **No Home
+Assistant `core` checkout is required** (the old clone-core + symlink + Docker
+flow has been retired).
 
-## Prerequisites
+## Running the tests
 
-Before running tests with Docker, you need a local Home Assistant core checkout with symlinks:
+From the repo root:
 
 ```bash
-# Clone HA core (one-time setup)
-git clone --depth 1 https://github.com/home-assistant/core.git core
-
-# Setup symlinks (one-time setup)
-./scripts/setup-symlinks
+uv run pytest
 ```
 
-## Running tests with Docker
+`uv` builds the environment from `pyproject.toml` (the `test` dependency group
+pulls in PHCC, `pytest`, and `pytest-asyncio`), and `testpaths = ["tests"]`
+scopes collection to this directory. Pass pytest arguments straight through:
 
-Navigate to the `adaptive-lighting` repo folder and execute the following command.
-
-**Important:** Mount the entire repo (`-v $(pwd):/app`), not individual directories, or the symlinks will break.
-
-Linux / MacOS / Windows PowerShell:
 ```bash
-docker run -v ${PWD}:/app basnijholt/adaptive-lighting:latest
+uv run pytest tests/test_number_platform.py -k ramp -vv
 ```
 
-- In windows command prompt, the command is:
-  ```bash
-  docker run -v %cd%:/app basnijholt/adaptive-lighting:latest
-  ```
+## What CI runs
 
-This command will download the Docker image from [the adaptive-lighting Docker Hub repo](https://hub.docker.com/r/basnijholt/adaptive-lighting) and run the tests.
+`.github/workflows/pytest.yaml` runs the same suite on two matrix entries:
 
-If you prefer to build the image yourself, use the following command:
+- **stable** — the latest released PHCC (current stable HA).
+- **dev** — the latest PHCC pre-release (`--pre`, upcoming HA beta), marked
+  `continue-on-error` so a missing or flaky pre-release never fails the build.
 
-```bash
-docker build -t basnijholt/adaptive-lighting:latest --no-cache --progress=plain .
-```
-
-This might be necessary if the image on Docker Hub is outdated or if the [`test_dependencies.py`](../test_dependencies.py) file is updated.
-
-## Passing arguments to pytest
-
-You can pass arguments to pytest by appending them to the command:
-
-For example, to run the tests with a custom log format, use the following command (this also gets rid of the captured stderr output):
+To reproduce a CI entry in a throwaway environment:
 
 ```bash
-docker run -v $(pwd):/app basnijholt/adaptive-lighting:latest --show-capture=log --log-format="%(asctime)s %(levelname)-8s %(name)s:%(filename)s:%(lineno)s %(message)s" --log-date-format="%H:%M:%S" tests/components/adaptive_lighting/
+PYTHONPATH="$PWD" uv run --no-project \
+  --with pytest-homeassistant-custom-component --with pytest \
+  --with pytest-asyncio --with ulid-transform \
+  pytest -q
 ```

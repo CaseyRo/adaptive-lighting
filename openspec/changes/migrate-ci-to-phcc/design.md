@@ -37,12 +37,14 @@ CI installs the `test` dependency group + the component's manifest requirements 
   - *Revert the tests to core-native (remove PHCC)* — rejected: undoes the completed migration, a large rewrite, against the repo's current direction.
 
 ### D2. Replace the 18-version `core-version` matrix with a small curated PHCC-version matrix
-Each PHCC release pins one HA version, so the matrix becomes a list of pinned PHCC versions. Proposed set: **minimum supported HA** (hacs.json floor, currently `2024.12`) and **latest stable**, optionally **HA `dev`/newest** as a non-blocking entry.
-- **Why:** adjacent patch releases in the old 18-entry matrix rarely diverge; min + latest catches the real breakage (a floor-version API removal, a latest-version deprecation) at a fraction of the maintenance and CI minutes.
-- **Alternatives considered:**
-  - *Single latest-only entry* — rejected: loses floor-version regressions, which are the ones users on older HA actually hit.
-  - *Map all ~18 HA releases to PHCC versions* — rejected: high maintenance, defeats the simplification; PHCC pins would need constant bumping.
-- **Consequence:** `scripts/update-test-matrix.py` + `update-test-matrix.yaml` (which auto-generated the core-version matrix) are retired in favour of a hand-maintained 2-3 entry matrix a human bumps occasionally.
+Under PHCC there is no HA-`core` checkout; the HA version is whatever the installed PHCC release targets. **Decision (maintainer, 2026-07-09): latest + dev only, no floor.**
+- **stable** entry — latest released PHCC (`uv pip install pytest-homeassistant-custom-component`), i.e. current stable HA.
+- **dev** entry — latest pre-release PHCC (`uv pip install --pre …`), i.e. the upcoming HA beta; job-level **`continue-on-error: true`** so a not-yet-published or flaky pre-release never reddens the suite.
+- **Why no floor:** this is a single-household fork that always runs latest/dev HA; a floor would constrain the code and, under PHCC, mean pinning an old PHCC the current tests may not even pass against. Matches the fork's "opinionated for one household, not a drop-in for everyone" stance.
+- **Alternatives considered:** a curated min+latest matrix — rejected by the maintainer (never runs old HA). Full 18-version matrix — rejected (maintenance; incompatible with PHCC's one-HA-per-release model).
+- **Consequence:** `scripts/update-test-matrix.py` + `update-test-matrix.yaml` are retired; the two-entry matrix is hand-maintained.
+- **Validated:** the recipe (fresh venv, Python 3.13, latest PHCC, repo on `PYTHONPATH`) runs the suite green (164 passed) locally before shipping the workflow.
+- **Also fixed:** the old `pytest.yaml` triggered on `push: branches: [master]`, but the default branch is `main` — so it never ran on main. The new workflow triggers on `main`.
 
 ### D3. Retire the Docker test image (`Dockerfile` + `docker-build.yml`)
 - **Why:** the image exists only to run the core-checkout tests in a container; the integration is distributed via HACS, not as a Docker image, so nothing consumes the ghcr artifact. With PHCC, `pytest` runs directly in the CI runner.
@@ -75,9 +77,11 @@ Rewrite `tests/README.md` to the PHCC flow (`uv run pytest`), drop the "Refresh 
 4. Push the branch; confirm the new `pytest` matrix is green and `Docker`/`update-test-matrix` no longer run (removed).
 5. Merge. **Rollback:** revert the PR — restores the old harness verbatim.
 
-## Open Questions
+## Resolved (review 2026-07-09)
 
-1. **OQ1 — Matrix breadth:** min + latest (2 entries), or min + latest + `dev` non-blocking (3)? *(Recommend: min + latest + dev-non-blocking.)*
-2. **OQ2 — Delete the Docker test image + `docker-build.yml` outright?** *(Recommend: yes.)*
-3. **OQ3 — Keep `Dockerfile` repurposed as an optional PHCC local-test container, or delete it?** *(Recommend: delete.)*
-4. **OQ4 — Exact minimum HA version to pin.** hacs.json floor is `2024.12`; confirm that is still the supported floor, and that a matching PHCC release exists to pin against.
+1. **OQ1 — Matrix breadth:** **latest + dev only** (dev `continue-on-error`). No floor — the maintainer always runs latest/dev HA.
+2. **OQ2 — Delete the Docker test image + `docker-build.yml`:** **yes.**
+3. **OQ3 — `Dockerfile`:** **delete** (no repurposed local-test container).
+4. **OQ4 — Declared minimum:** no tested floor; bump `hacs.json` `2024.12.0` → `2026.1.0` and fix the README min-version line (it wrongly claims `2025.1.0` "pinned in `manifest.json`" — the manifest pins no minimum).
+
+Note: coverage reporting (`--cov`) from the old workflow is dropped — it was computed but never uploaded (no codecov step); re-add `pytest-cov` + an upload step later if wanted.

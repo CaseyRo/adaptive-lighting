@@ -63,7 +63,7 @@
 >   `sensor.sun2_astro_dawn` for the smoothest fade from deep night to dawn,
 >   or `sensor.sun2_dawn` for civil twilight. Optional but recommended.
 >
-> **Minimum Home Assistant version: `2025.1.0`** (pinned in `manifest.json`).
+> **Minimum Home Assistant version: `2026.1.0`** (declared in `hacs.json`).
 >
 > ## ✨ What's new in 2.1
 >
